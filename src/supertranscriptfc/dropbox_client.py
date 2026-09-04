@@ -10,13 +10,22 @@ logger = logging.getLogger("supertranscriptfc")
 
 class DropboxClient:
     """Wrapper fino sobre o SDK oficial do Dropbox. Import feito dentro do
-    __init__ para nao exigir a dependencia so' para importar o modulo."""
+    __init__ para nao exigir a dependencia so' para importar o modulo.
 
-    def __init__(self, access_token: str):
+    Autentica via app key/secret + refresh token (fluxo OAuth2 de longa
+    duracao): o SDK renova o access token sozinho a cada chamada, entao o
+    processo pode rodar sem intervencao manual indefinidamente, ao contrario
+    de um access token avulso, que expira em poucas horas."""
+
+    def __init__(self, app_key: str, app_secret: str, refresh_token: str):
         import dropbox
 
         self._dbx_module = dropbox
-        self.dbx = dropbox.Dropbox(access_token)
+        self.dbx = dropbox.Dropbox(
+            oauth2_refresh_token=refresh_token,
+            app_key=app_key,
+            app_secret=app_secret,
+        )
 
     def list_audio_files(self, folder_path: str) -> list[str]:
         """Lista arquivos de audio/video na pasta (nao recursivo)."""

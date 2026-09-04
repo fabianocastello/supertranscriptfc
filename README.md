@@ -39,7 +39,9 @@ Instala `torch` CPU-only (ps20 nao tem GPU dedicada).
 Depois de instalar em qualquer plataforma, edite o arquivo `.env` criado a
 partir de `.env.example` e preencha:
 
-- `DROPBOX_ACCESS_TOKEN` — token do App Dropbox usado para baixar/enviar arquivos.
+- `DROPBOX_APP_KEY`, `DROPBOX_APP_SECRET`, `DROPBOX_REFRESH_TOKEN` — credenciais
+  OAuth2 do App Dropbox (fluxo de refresh token, sem expiracao — o SDK renova
+  o access token automaticamente a cada chamada).
 - `HF_TOKEN` — token do Hugging Face com acesso aos modelos
   `pyannote/speaker-diarization-3.1` e `pyannote/segmentation-3.0` (aceite os
   termos de uso de cada um no site do Hugging Face antes de usar).

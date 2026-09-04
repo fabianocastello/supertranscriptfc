@@ -69,12 +69,17 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 logger.info("Nada a fazer (arquivo ja processado anteriormente).")
         else:
-            if not config.dropbox_token:
-                logger.error("DROPBOX_ACCESS_TOKEN nao configurado (veja .env.example).")
+            if not config.has_dropbox_credentials:
+                logger.error(
+                    "DROPBOX_APP_KEY / DROPBOX_APP_SECRET / DROPBOX_REFRESH_TOKEN "
+                    "nao configurados (veja .env.example)."
+                )
                 return 1
             from .dropbox_client import DropboxClient
 
-            client = DropboxClient(config.dropbox_token)
+            client = DropboxClient(
+                config.dropbox_app_key, config.dropbox_app_secret, config.dropbox_refresh_token
+            )
             outputs = run_dropbox_job(config, client, args.source, args.dest)
             if outputs:
                 logger.info("Concluido. Arquivos enviados ao Dropbox: %s", outputs)

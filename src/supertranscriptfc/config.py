@@ -18,8 +18,16 @@ class Config:
             os.environ.get("SUPERTRANSCRIPTFC_HOME") or Path.home() / ".supertranscriptfc"
         )
     )
-    dropbox_token: str | None = field(default_factory=lambda: os.environ.get("DROPBOX_ACCESS_TOKEN"))
+    dropbox_app_key: str | None = field(default_factory=lambda: os.environ.get("DROPBOX_APP_KEY"))
+    dropbox_app_secret: str | None = field(default_factory=lambda: os.environ.get("DROPBOX_APP_SECRET"))
+    dropbox_refresh_token: str | None = field(
+        default_factory=lambda: os.environ.get("DROPBOX_REFRESH_TOKEN")
+    )
     hf_token: str | None = field(default_factory=lambda: os.environ.get("HF_TOKEN"))
+
+    @property
+    def has_dropbox_credentials(self) -> bool:
+        return bool(self.dropbox_app_key and self.dropbox_app_secret and self.dropbox_refresh_token)
 
     model_size: str = "large-v3"
     device: str = "auto"  # auto | cpu | cuda

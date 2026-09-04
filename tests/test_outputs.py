@@ -1,0 +1,35 @@
+from pathlib import Path
+
+from supertranscriptfc.merge import LabeledSegment
+from supertranscriptfc.outputs import write_srt, write_txt, write_vtt
+
+
+def make_segments():
+    return [
+        LabeledSegment(start=0.0, end=1.5, text="Ola, tudo bem?", speaker="Pessoa 1"),
+        LabeledSegment(start=1.6, end=3.0, text="Tudo bem, e voce?", speaker="Pessoa 2"),
+        LabeledSegment(start=3.1, end=4.0, text="Tambem estou bem.", speaker="Pessoa 2"),
+    ]
+
+
+def test_write_txt_groups_consecutive_same_speaker(tmp_path: Path):
+    out = write_txt(make_segments(), tmp_path / "out.txt")
+    content = out.read_text(encoding="utf-8")
+    assert content == (
+        "Pessoa 1: Ola, tudo bem?\n\n"
+        "Pessoa 2: Tudo bem, e voce? Tambem estou bem.\n"
+    )
+
+
+def test_write_srt_format(tmp_path: Path):
+    out = write_srt(make_segments(), tmp_path / "out.srt")
+    content = out.read_text(encoding="utf-8")
+    assert "1\n00:00:00,000 --> 00:00:01,500\nPessoa 1: Ola, tudo bem?" in content
+    assert "2\n00:00:01,600 --> 00:00:03,000\nPessoa 2: Tudo bem, e voce?" in content
+
+
+def test_write_vtt_format(tmp_path: Path):
+    out = write_vtt(make_segments(), tmp_path / "out.vtt")
+    content = out.read_text(encoding="utf-8")
+    assert content.startswith("WEBVTT\n")
+    assert "00:00:00.000 --> 00:00:01.500\nPessoa 1: Ola, tudo bem?" in content

@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import logging
 import shutil
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from .audio import convert_to_wav
 from .config import Config
 from .diarize import diarize_audio
 from .merge import assign_speakers
+from .naming import build_output_stem
 from .outputs import write_srt, write_txt, write_vtt
 from .state import JobState, ProcessedRegistry, compute_job_id
 from .transcribe import transcribe_audio
@@ -115,8 +116,9 @@ def run_local_job(config: Config, source: Path, dest_dir: Path | None) -> list[P
         return []
 
     work_dir = config.tmp_dir / job_id
+    output_stem = build_output_stem(source.stem, source.parent.name)
     output_paths = process_file(
-        config, input_path=source, output_stem=source.stem, work_dir=work_dir, source_ref=source_ref
+        config, input_path=source, output_stem=output_stem, work_dir=work_dir, source_ref=source_ref
     )
 
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -144,8 +146,9 @@ def run_dropbox_job(config: Config, dropbox_client, source_path: str, dest_folde
         logger.info("Arquivo ja processado anteriormente, pulando: %s", source_path)
         return []
 
-    stem = Path(source_path).stem
-    dest_folder = dest_folder or str(Path(source_path).parent).replace("\\", "/")
+    source_purepath = PurePosixPath(source_path)
+    stem = build_output_stem(source_purepath.stem, source_purepath.parent.name)
+    dest_folder = dest_folder or str(source_purepath.parent)
     if dest_folder != "/":
         dest_folder = dest_folder.rstrip("/")
 

@@ -28,6 +28,7 @@ class ProgressPrinter:
         self.start_time = time.monotonic()
         self._last_print = 0.0
         self._printed = False
+        self._last_line_len = 0
 
     def update(self, processed_seconds: float) -> None:
         now = time.monotonic()
@@ -45,9 +46,11 @@ class ProgressPrinter:
         remaining_audio = max(0.0, self.total_seconds - processed_seconds)
         eta = remaining_audio / rate if rate > 0 else None
         eta_str = format_duration(eta) if eta is not None else "?"
-        line = f"\r{self.label}: {pct:5.1f}% (ETA {eta_str})"
-        sys.stderr.write(line)
+        text = f"{self.label}: {pct:5.1f}% (ETA {eta_str})"
+        padding = max(0, self._last_line_len - len(text))
+        sys.stderr.write(f"\r{text}{' ' * padding}")
         sys.stderr.flush()
+        self._last_line_len = len(text)
         self._printed = True
 
     def finish(self) -> None:

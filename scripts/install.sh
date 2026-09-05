@@ -45,10 +45,10 @@ if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi >/dev/null 2>&1; then
     EXTRAS="${EXTRAS},cuda"
 else
     echo "Nenhuma GPU NVIDIA detectada: instalando torch/torchaudio CPU-only (menor download)."
-    # torchaudio (dependencia do pyannote.audio) tambem precisa vir da variante
-    # CPU: o wheel padrao do PyPI carrega uma extensao nativa vinculada a
-    # libcudart, que falha ao importar em maquinas sem CUDA instalado.
-    pip install -q --index-url https://download.pytorch.org/whl/cpu torch torchaudio || true
+    # torchaudio e torchcodec (dependencias do pyannote.audio) tambem precisam
+    # vir da variante CPU: o wheel padrao do PyPI carrega uma extensao nativa
+    # vinculada a libcudart, que falha ao importar em maquinas sem CUDA.
+    pip install -q --index-url https://download.pytorch.org/whl/cpu torch torchaudio torchcodec || true
 fi
 
 echo "Instalando o pacote (extras: ${EXTRAS}) ..."

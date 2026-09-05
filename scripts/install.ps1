@@ -39,8 +39,8 @@ if ($hasNvidia) {
     Write-Host "GPU NVIDIA detectada: instalando com suporte a CUDA."
     $Extras = "$Extras,cuda"
 } else {
-    Write-Host "Nenhuma GPU NVIDIA detectada (ex: ps20): instalando torch CPU-only (menor download)."
-    pip install -q --index-url https://download.pytorch.org/whl/cpu torch
+    Write-Host "Nenhuma GPU NVIDIA detectada (ex: ps20): instalando torch/torchaudio CPU-only (menor download)."
+    pip install -q --index-url https://download.pytorch.org/whl/cpu torch torchaudio
 }
 
 Write-Host "Instalando o pacote (extras: $Extras) ..."

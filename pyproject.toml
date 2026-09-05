@@ -10,7 +10,7 @@ dependencies = [
 [project.optional-dependencies]
 dropbox = ["dropbox>=11.36.0"]
 transcribe = ["faster-whisper>=1.0.0"]
-diarize = ["pyannote.audio>=3.1.0", "torch>=2.1.0", "torchcodec"]
+diarize = ["pyannote.audio>=3.1.0", "torch>=2.1.0"]
 # So' necessario em maquinas Linux/Windows com GPU NVIDIA: fornece libcublas.so.12
 # e libcudnn, que o ctranslate2 (motor do faster-whisper) carrega em runtime e
 # nao vem embutido no wheel do torch. install.sh/install.ps1 adicionam este
@@ -21,7 +21,6 @@ all = [
     "faster-whisper>=1.0.0",
     "pyannote.audio>=3.1.0",
     "torch>=2.1.0",
-    "torchcodec",
 ]
 
 [project.scripts]

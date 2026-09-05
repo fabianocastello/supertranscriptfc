@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import wave
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -12,6 +13,38 @@ class SpeakerTurn:
     start: float
     end: float
     speaker: str  # rotulo bruto do pyannote, ex: "SPEAKER_00"
+
+
+def _load_wav_as_waveform(wav_path: Path):
+    """Le um WAV mono PCM16 (o formato que convert_to_wav sempre gera) e
+    devolve (waveform, sample_rate) prontos para o pyannote. Usa so' o
+    modulo 'wave' da biblioteca padrao para evitar depender do torchcodec,
+    que o proprio pyannote.audio/torchaudio exigiriam para abrir o arquivo
+    sozinhos e que costuma falhar por incompatibilidade com o FFmpeg do
+    sistema (visto na leno18)."""
+    import numpy as np
+    import torch
+
+    with wave.open(str(wav_path), "rb") as wf:
+        n_channels = wf.getnchannels()
+        sample_width = wf.getsampwidth()
+        sample_rate = wf.getframerate()
+        raw = wf.readframes(wf.getnframes())
+
+    if sample_width != 2:
+        raise RuntimeError(
+            f"Formato de audio inesperado (sample_width={sample_width} bytes); "
+            "esperado PCM16 (o que convert_to_wav sempre gera)."
+        )
+
+    samples = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
+    if n_channels > 1:
+        samples = samples.reshape(-1, n_channels).T
+    else:
+        samples = samples.reshape(1, -1)
+
+    waveform = torch.from_numpy(samples.copy())
+    return waveform, sample_rate
 
 
 def diarize_audio(
@@ -49,8 +82,11 @@ def diarize_audio(
     if max_speakers is not None:
         kwargs["max_speakers"] = max_speakers
 
+    waveform, sample_rate = _load_wav_as_waveform(wav_path)
+    audio_input = {"waveform": waveform, "sample_rate": sample_rate}
+
     with ProgressHook() as hook:
-        result = pipeline(str(wav_path), hook=hook, **kwargs)
+        result = pipeline(audio_input, hook=hook, **kwargs)
     # pyannote.audio >= 4 retorna um DiarizeOutput com o Annotation em
     # .speaker_diarization; versoes anteriores retornam o Annotation direto.
     annotation = getattr(result, "speaker_diarization", result)

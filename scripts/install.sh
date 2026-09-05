@@ -42,6 +42,7 @@ pip install --upgrade pip -q
 EXTRAS="dropbox,transcribe,diarize"
 if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi >/dev/null 2>&1; then
     echo "GPU NVIDIA detectada: instalando com suporte a CUDA."
+    EXTRAS="${EXTRAS},cuda"
 else
     echo "Nenhuma GPU NVIDIA detectada: instalando torch CPU-only (menor download)."
     pip install -q --index-url https://download.pytorch.org/whl/cpu torch || true

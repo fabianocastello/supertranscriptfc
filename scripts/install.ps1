@@ -33,16 +33,18 @@ if (-not (Test-Path ".venv")) {
 python -m pip install --upgrade pip -q
 
 # --- 4. Detectar GPU NVIDIA (CUDA) ---
+$Extras = "dropbox,transcribe,diarize"
 $hasNvidia = Get-Command nvidia-smi -ErrorAction SilentlyContinue
 if ($hasNvidia) {
     Write-Host "GPU NVIDIA detectada: instalando com suporte a CUDA."
+    $Extras = "$Extras,cuda"
 } else {
     Write-Host "Nenhuma GPU NVIDIA detectada (ex: ps20): instalando torch CPU-only (menor download)."
     pip install -q --index-url https://download.pytorch.org/whl/cpu torch
 }
 
-Write-Host "Instalando o pacote (extras: dropbox,transcribe,diarize) ..."
-pip install -q -e ".[dropbox,transcribe,diarize]"
+Write-Host "Instalando o pacote (extras: $Extras) ..."
+pip install -q -e ".[$Extras]"
 
 # --- 5. Criar .env a partir do exemplo, se necessario ---
 if (-not (Test-Path ".env")) {

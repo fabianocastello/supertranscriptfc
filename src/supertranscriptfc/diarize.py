@@ -39,9 +39,7 @@ def diarize_audio(
         device = "cpu"
     logger.info("Executando diarizacao com pyannote.audio (device=%s)", device)
 
-    pipeline = Pipeline.from_pretrained(
-        "pyannote/speaker-diarization-3.1", use_auth_token=hf_token
-    )
+    pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1", token=hf_token)
     pipeline.to(torch.device(device))
 
     kwargs = {}
@@ -50,11 +48,14 @@ def diarize_audio(
     if max_speakers is not None:
         kwargs["max_speakers"] = max_speakers
 
-    diarization = pipeline(str(wav_path), **kwargs)
+    result = pipeline(str(wav_path), **kwargs)
+    # pyannote.audio >= 4 retorna um DiarizeOutput com o Annotation em
+    # .speaker_diarization; versoes anteriores retornam o Annotation direto.
+    annotation = getattr(result, "speaker_diarization", result)
 
     turns = [
         SpeakerTurn(start=turn.start, end=turn.end, speaker=speaker)
-        for turn, _, speaker in diarization.itertracks(yield_label=True)
+        for turn, _, speaker in annotation.itertracks(yield_label=True)
     ]
     n_speakers = len({t.speaker for t in turns})
     logger.info("Diarizacao concluida: %d turnos, %d locutores detectados", len(turns), n_speakers)

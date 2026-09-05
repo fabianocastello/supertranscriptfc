@@ -2,14 +2,16 @@ from __future__ import annotations
 
 import logging
 import shutil
+from datetime import datetime
 from pathlib import Path, PurePosixPath
 
-from .audio import convert_to_wav
+from .audio import convert_to_wav, probe_duration_seconds
 from .config import Config
 from .diarize import diarize_audio
 from .merge import assign_speakers
 from .naming import build_output_stem
 from .outputs import write_srt, write_txt, write_vtt
+from .progress import format_duration
 from .state import JobState, ProcessedRegistry, compute_job_id
 from .transcribe import transcribe_audio
 
@@ -39,11 +41,23 @@ def process_file(
     output_dir = work_dir / "output"
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    input_size_mb = input_path.stat().st_size / 1_000_000
+    logger.info(
+        "[%s] Arquivo de origem: %s (%.1f MB, modificado em %s)",
+        job_id,
+        input_path.name,
+        input_size_mb,
+        datetime.fromtimestamp(input_path.stat().st_mtime).strftime("%Y-%m-%d %H:%M"),
+    )
+
     if not state.is_done("converted"):
         convert_to_wav(input_path, wav_path)
         state.mark_done("converted")
     else:
         logger.info("[%s] Conversao ja concluida, pulando.", job_id)
+
+    audio_duration = probe_duration_seconds(wav_path)
+    logger.info("[%s] Duracao do audio: %s", job_id, format_duration(audio_duration))
 
     if not state.is_done("transcribed"):
         segments = transcribe_audio(

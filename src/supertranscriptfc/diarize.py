@@ -29,6 +29,7 @@ def diarize_audio(
         )
 
     from pyannote.audio import Pipeline
+    from pyannote.audio.pipelines.utils.hook import ProgressHook
     import torch
 
     if torch.cuda.is_available():
@@ -48,7 +49,8 @@ def diarize_audio(
     if max_speakers is not None:
         kwargs["max_speakers"] = max_speakers
 
-    result = pipeline(str(wav_path), **kwargs)
+    with ProgressHook() as hook:
+        result = pipeline(str(wav_path), hook=hook, **kwargs)
     # pyannote.audio >= 4 retorna um DiarizeOutput com o Annotation em
     # .speaker_diarization; versoes anteriores retornam o Annotation direto.
     annotation = getattr(result, "speaker_diarization", result)

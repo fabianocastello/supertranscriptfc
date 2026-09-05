@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from importlib import import_module
 from pathlib import Path
 
+from .progress import ProgressPrinter
+
 logger = logging.getLogger("supertranscriptfc")
 
 
@@ -94,9 +96,13 @@ def transcribe_audio(
         getattr(info, "language_probability", 0.0),
     )
 
-    segments = [
-        TranscriptSegment(start=seg.start, end=seg.end, text=seg.text.strip())
-        for seg in segments_iter
-    ]
+    total_duration = getattr(info, "duration", None) or 0.0
+    progress = ProgressPrinter("Transcrevendo", total_duration)
+    segments = []
+    for seg in segments_iter:
+        segments.append(TranscriptSegment(start=seg.start, end=seg.end, text=seg.text.strip()))
+        progress.update(seg.end)
+    progress.finish()
+
     logger.info("Transcricao concluida: %d segmentos", len(segments))
     return segments

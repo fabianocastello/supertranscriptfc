@@ -32,6 +32,14 @@ class DropboxClient:
         metadata = self.dbx.files_get_metadata(path)
         return isinstance(metadata, FolderMetadata)
 
+    def file_exists(self, path: str) -> bool:
+        ApiError = self._dbx_module.exceptions.ApiError
+        try:
+            self.dbx.files_get_metadata(path)
+            return True
+        except ApiError:
+            return False
+
     def list_audio_files(self, folder_path: str, recursive: bool = False) -> list[str]:
         """Lista arquivos de audio/video na pasta, opcionalmente descendo em
         subpastas (util para series de podcast com uma pasta por episodio)."""
@@ -72,3 +80,22 @@ class DropboxClient:
             self.dbx.files_create_folder_v2(dropbox_path)
         except ApiError:
             pass  # pasta ja existe
+
+    def write_text_file(self, dropbox_path: str, text: str) -> None:
+        WriteMode = self._dbx_module.files.WriteMode
+        self.dbx.files_upload(text.encode("utf-8"), dropbox_path, mode=WriteMode.overwrite)
+
+    def read_text_file(self, dropbox_path: str) -> str | None:
+        ApiError = self._dbx_module.exceptions.ApiError
+        try:
+            _metadata, response = self.dbx.files_download(dropbox_path)
+            return response.content.decode("utf-8")
+        except ApiError:
+            return None
+
+    def delete_file(self, dropbox_path: str) -> None:
+        ApiError = self._dbx_module.exceptions.ApiError
+        try:
+            self.dbx.files_delete_v2(dropbox_path)
+        except ApiError:
+            pass  # ja nao existe / ja foi removido

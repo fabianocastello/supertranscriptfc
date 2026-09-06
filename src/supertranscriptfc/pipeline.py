@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import logging
 import shutil
-from datetime import datetime
+import socket
+from datetime import datetime, timedelta
 from pathlib import Path, PurePosixPath
 
 from .audio import convert_to_wav, probe_duration_seconds
@@ -16,6 +17,24 @@ from .state import JobState, ProcessedRegistry, compute_job_id
 from .transcribe import transcribe_audio
 
 logger = logging.getLogger("supertranscriptfc")
+
+# Um processamento longo (audio de varias horas em CPU) pode legitimamente
+# levar mais de um dia; alem disso consideramos o lock abandonado (ex: a
+# maquina foi desligada no meio do processo) e deixamos outra maquina assumir.
+LOCK_STALE_AFTER = timedelta(hours=36)
+
+
+def _make_lock_content() -> str:
+    return f"{socket.gethostname()} {datetime.now().isoformat()}"
+
+
+def _is_lock_stale(lock_content: str) -> bool:
+    try:
+        _host, iso_timestamp = lock_content.rsplit(" ", 1)
+        locked_at = datetime.fromisoformat(iso_timestamp)
+    except ValueError:
+        return True
+    return datetime.now() - locked_at > LOCK_STALE_AFTER
 
 
 def process_file(
@@ -125,12 +144,13 @@ def run_local_job(config: Config, source: Path, dest_dir: Path | None) -> list[P
     job_id = compute_job_id(source_ref)
     registry = ProcessedRegistry(config.state_file)
 
-    if registry.is_processed(job_id) and not config.force:
-        logger.info("Arquivo ja processado anteriormente, pulando: %s", source)
+    output_stem = build_output_stem(source.stem, source.parent.name)
+    transcript_path = dest_dir / f"{output_stem}.transcriptFC.txt"
+    if transcript_path.exists() and not config.force:
+        logger.info("Transcricao ja existe (%s), pulando: %s", transcript_path.name, source)
         return []
 
     work_dir = config.tmp_dir / job_id
-    output_stem = build_output_stem(source.stem, source.parent.name)
     output_paths = process_file(
         config, input_path=source, output_stem=output_stem, work_dir=work_dir, source_ref=source_ref
     )
@@ -156,46 +176,68 @@ def run_dropbox_job(config: Config, dropbox_client, source_path: str, dest_folde
     job_id = compute_job_id(source_ref)
     registry = ProcessedRegistry(config.state_file)
 
-    if registry.is_processed(job_id) and not config.force:
-        logger.info("Arquivo ja processado anteriormente, pulando: %s", source_path)
-        return []
-
     source_purepath = PurePosixPath(source_path)
     stem = build_output_stem(source_purepath.stem, source_purepath.parent.name)
     dest_folder = dest_folder or str(source_purepath.parent)
     if dest_folder != "/":
         dest_folder = dest_folder.rstrip("/")
 
-    work_dir = config.tmp_dir / job_id
-    state = JobState(job_id=job_id, source_ref=source_ref, work_dir=work_dir)
-    state.load()
+    transcript_remote_path = f"{dest_folder}/{stem}.transcriptFC.txt"
+    if not config.force and dropbox_client.file_exists(transcript_remote_path):
+        logger.info("Transcricao ja existe (%s), pulando: %s", transcript_remote_path, source_path)
+        return []
 
-    local_input = work_dir / Path(source_path).name
-    if not state.is_done("downloaded"):
-        dropbox_client.download_file(source_path, local_input)
-        state.mark_done("downloaded")
-    else:
-        logger.info("[%s] Download ja concluido, pulando.", job_id)
+    lock_remote_path = f"{dest_folder}/{stem}.transcriptFC.lock"
+    if not config.force:
+        lock_content = dropbox_client.read_text_file(lock_remote_path)
+        if lock_content and not _is_lock_stale(lock_content):
+            logger.info(
+                "Ja esta sendo processado por outra maquina (%s), pulando: %s",
+                lock_content,
+                source_path,
+            )
+            return []
+        if lock_content:
+            logger.warning(
+                "Lock antigo encontrado (%s) - assumindo abandonado e prosseguindo: %s",
+                lock_content,
+                source_path,
+            )
 
-    output_paths = process_file(
-        config, input_path=local_input, output_stem=stem, work_dir=work_dir, source_ref=source_ref
-    )
+    dropbox_client.ensure_folder(dest_folder)
+    dropbox_client.write_text_file(lock_remote_path, _make_lock_content())
+    try:
+        work_dir = config.tmp_dir / job_id
+        state = JobState(job_id=job_id, source_ref=source_ref, work_dir=work_dir)
+        state.load()
 
-    if not state.is_done("uploaded"):
-        dropbox_client.ensure_folder(dest_folder)
-        uploaded = []
-        for p in output_paths:
-            remote_path = f"{dest_folder}/{p.name}"
-            dropbox_client.upload_file(p, remote_path)
-            uploaded.append(remote_path)
-        state.mark_done("uploaded", uploaded=uploaded)
-    else:
-        uploaded = state.data["uploaded"]
-        logger.info("[%s] Upload ja concluido, pulando.", job_id)
+        local_input = work_dir / Path(source_path).name
+        if not state.is_done("downloaded"):
+            dropbox_client.download_file(source_path, local_input)
+            state.mark_done("downloaded")
+        else:
+            logger.info("[%s] Download ja concluido, pulando.", job_id)
 
-    registry.mark_processed(job_id, source_ref, uploaded)
-    cleanup_work_dir(work_dir, config.keep_temp)
-    return uploaded
+        output_paths = process_file(
+            config, input_path=local_input, output_stem=stem, work_dir=work_dir, source_ref=source_ref
+        )
+
+        if not state.is_done("uploaded"):
+            uploaded = []
+            for p in output_paths:
+                remote_path = f"{dest_folder}/{p.name}"
+                dropbox_client.upload_file(p, remote_path)
+                uploaded.append(remote_path)
+            state.mark_done("uploaded", uploaded=uploaded)
+        else:
+            uploaded = state.data["uploaded"]
+            logger.info("[%s] Upload ja concluido, pulando.", job_id)
+
+        registry.mark_processed(job_id, source_ref, uploaded)
+        cleanup_work_dir(work_dir, config.keep_temp)
+        return uploaded
+    finally:
+        dropbox_client.delete_file(lock_remote_path)
 
 
 def _iter_local_audio_files(source_dir: Path, recursive: bool) -> list[Path]:

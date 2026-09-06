@@ -39,8 +39,13 @@ source .venv/bin/activate
 pip install --upgrade pip -q
 
 # --- 4. Detectar GPU NVIDIA (CUDA) ---
+# So' relevante em Linux/Windows: no macOS o torch do PyPI ja' vem sem CUDA
+# (roda em CPU, com aceleracao MPS onde suportado) e o indice /whl/cpu nao
+# publica wheels para macOS/arm64.
 EXTRAS="dropbox,transcribe,diarize"
-if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi >/dev/null 2>&1; then
+if [ "$OS" = "Darwin" ]; then
+    echo "macOS detectado: torch ja' roda em CPU/MPS sem necessidade de indice especial."
+elif command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi >/dev/null 2>&1; then
     echo "GPU NVIDIA detectada: instalando com suporte a CUDA."
     EXTRAS="${EXTRAS},cuda"
 else
@@ -57,7 +62,7 @@ pip install -q -e ".[${EXTRAS}]"
 # --- 5. Criar .env a partir do exemplo, se necessario ---
 if [ ! -f ".env" ]; then
     cp .env.example .env
-    echo "Arquivo .env criado a partir de .env.example. Preencha DROPBOX_ACCESS_TOKEN e HF_TOKEN."
+    echo "Arquivo .env criado a partir de .env.example. Preencha DROPBOX_APP_KEY, DROPBOX_APP_SECRET, DROPBOX_REFRESH_TOKEN e HF_TOKEN."
 fi
 
 echo ""

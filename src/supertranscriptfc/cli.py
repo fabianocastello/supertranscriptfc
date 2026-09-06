@@ -69,6 +69,13 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 logger.info("Nada a fazer (arquivo ja processado anteriormente).")
         else:
+            if not args.source.startswith("/"):
+                logger.error(
+                    "'--source %s' nao parece um caminho do Dropbox (precisa comecar com '/'). "
+                    "Se e' um arquivo local, use --local.",
+                    args.source,
+                )
+                return 1
             if not config.has_dropbox_credentials:
                 logger.error(
                     "DROPBOX_APP_KEY / DROPBOX_APP_SECRET / DROPBOX_REFRESH_TOKEN "

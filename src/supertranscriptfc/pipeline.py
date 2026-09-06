@@ -95,7 +95,7 @@ def process_file(
 
     output_paths: list[Path] = []
     if config.write_txt:
-        output_paths.append(write_txt(labeled_segments, output_dir / f"{output_stem}.txt"))
+        output_paths.append(write_txt(labeled_segments, output_dir / f"{output_stem}.transcriptFC.txt"))
     if config.write_srt:
         output_paths.append(write_srt(labeled_segments, output_dir / f"{output_stem}.srt"))
     if config.write_vtt:

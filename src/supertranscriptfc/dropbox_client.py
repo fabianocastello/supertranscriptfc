@@ -27,11 +27,18 @@ class DropboxClient:
             app_secret=app_secret,
         )
 
-    def list_audio_files(self, folder_path: str) -> list[str]:
-        """Lista arquivos de audio/video na pasta (nao recursivo)."""
-        folder_path = folder_path.rstrip("/")
+    def is_folder(self, path: str) -> bool:
+        FolderMetadata = self._dbx_module.files.FolderMetadata
+        metadata = self.dbx.files_get_metadata(path)
+        return isinstance(metadata, FolderMetadata)
+
+    def list_audio_files(self, folder_path: str, recursive: bool = False) -> list[str]:
+        """Lista arquivos de audio/video na pasta, opcionalmente descendo em
+        subpastas (util para series de podcast com uma pasta por episodio)."""
+        folder_path = folder_path.rstrip("/") or "/"
+        list_path = "" if folder_path == "/" else folder_path
         entries = []
-        result = self.dbx.files_list_folder(folder_path)
+        result = self.dbx.files_list_folder(list_path, recursive=recursive)
         entries.extend(result.entries)
         while result.has_more:
             result = self.dbx.files_list_folder_continue(result.cursor)
@@ -43,7 +50,7 @@ class DropboxClient:
             for e in entries
             if isinstance(e, FileMetadata) and e.path_lower.endswith(AUDIO_EXTENSIONS)
         ]
-        return paths
+        return sorted(paths)
 
     def download_file(self, dropbox_path: str, local_path: Path) -> Path:
         local_path.parent.mkdir(parents=True, exist_ok=True)

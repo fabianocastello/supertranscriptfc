@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path, PurePosixPath
 
 from .audio import convert_to_wav, probe_duration_seconds
-from .config import Config
+from .config import AUDIO_EXTENSIONS, Config
 from .diarize import diarize_audio
 from .merge import assign_speakers
 from .naming import build_output_stem
@@ -196,3 +196,66 @@ def run_dropbox_job(config: Config, dropbox_client, source_path: str, dest_folde
     registry.mark_processed(job_id, source_ref, uploaded)
     cleanup_work_dir(work_dir, config.keep_temp)
     return uploaded
+
+
+def _iter_local_audio_files(source_dir: Path, recursive: bool) -> list[Path]:
+    pattern_fn = source_dir.rglob if recursive else source_dir.glob
+    files = [
+        p for p in pattern_fn("*") if p.is_file() and p.suffix.lower() in AUDIO_EXTENSIONS
+    ]
+    return sorted(files)
+
+
+def run_local_batch(
+    config: Config, source_dir: Path, dest_dir: Path | None, recursive: bool = False
+) -> dict[str, list]:
+    """Processa todos os arquivos de audio de um diretorio local. Continua
+    para o proximo arquivo mesmo se um deles falhar; retorna um resumo com
+    os arquivos processados, pulados (ja concluidos) e com erro."""
+    source_dir = source_dir.resolve()
+    files = _iter_local_audio_files(source_dir, recursive)
+    logger.info("Encontrados %d arquivo(s) de audio em %s", len(files), source_dir)
+
+    summary: dict[str, list] = {"processed": [], "skipped": [], "failed": []}
+    for i, audio_path in enumerate(files, start=1):
+        logger.info("--- Arquivo %d/%d: %s ---", i, len(files), audio_path.name)
+        try:
+            outputs = run_local_job(config, audio_path, dest_dir)
+        except Exception:
+            logger.exception("Falha ao processar %s, continuando com os demais.", audio_path)
+            summary["failed"].append(str(audio_path))
+            continue
+        if outputs:
+            summary["processed"].append(str(audio_path))
+        else:
+            summary["skipped"].append(str(audio_path))
+    return summary
+
+
+def run_dropbox_batch(
+    config: Config,
+    dropbox_client,
+    source_folder: str,
+    dest_folder: str | None,
+    recursive: bool = False,
+) -> dict[str, list]:
+    """Processa todos os arquivos de audio de uma pasta do Dropbox. Continua
+    para o proximo arquivo mesmo se um deles falhar; retorna um resumo com
+    os arquivos processados, pulados (ja concluidos) e com erro."""
+    files = dropbox_client.list_audio_files(source_folder, recursive=recursive)
+    logger.info("Encontrados %d arquivo(s) de audio em %s", len(files), source_folder)
+
+    summary: dict[str, list] = {"processed": [], "skipped": [], "failed": []}
+    for i, audio_path in enumerate(files, start=1):
+        logger.info("--- Arquivo %d/%d: %s ---", i, len(files), audio_path)
+        try:
+            outputs = run_dropbox_job(config, dropbox_client, audio_path, dest_folder)
+        except Exception:
+            logger.exception("Falha ao processar %s, continuando com os demais.", audio_path)
+            summary["failed"].append(audio_path)
+            continue
+        if outputs:
+            summary["processed"].append(audio_path)
+        else:
+            summary["skipped"].append(audio_path)
+    return summary

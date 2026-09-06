@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .config import Config
 from .logging_setup import setup_logging
-from .pipeline import run_dropbox_job, run_local_job
+from .pipeline import run_dropbox_batch, run_dropbox_job, run_local_batch, run_local_job
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -14,7 +14,12 @@ def build_parser() -> argparse.ArgumentParser:
         prog="supertranscriptfc",
         description="Baixa audio, transcreve, diariza por locutor e envia os resultados.",
     )
-    parser.add_argument("--source", required=True, help="Caminho do arquivo de origem (local ou Dropbox).")
+    parser.add_argument(
+        "--source",
+        required=True,
+        help="Caminho do arquivo OU pasta de origem (local ou Dropbox). Se for uma pasta, "
+        "processa todos os audios nela.",
+    )
     parser.add_argument(
         "--dest",
         default=None,
@@ -24,6 +29,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--local",
         action="store_true",
         help="Trata --source/--dest como caminhos locais em vez de caminhos do Dropbox.",
+    )
+    parser.add_argument(
+        "--recursive",
+        action="store_true",
+        help="Ao processar uma pasta, tambem desce em subpastas (util para series de podcast "
+        "com uma subpasta por episodio).",
     )
     parser.add_argument("--model-size", default="large-v3", help="Modelo faster-whisper (default: large-v3).")
     parser.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda"])
@@ -63,11 +74,16 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.local:
             dest_dir = Path(args.dest) if args.dest else None
-            outputs = run_local_job(config, Path(args.source), dest_dir)
-            if outputs:
-                logger.info("Concluido. Arquivos gerados: %s", [str(p) for p in outputs])
+            source_path = Path(args.source)
+            if source_path.is_dir():
+                summary = run_local_batch(config, source_path, dest_dir, recursive=args.recursive)
+                _log_batch_summary(logger, summary)
             else:
-                logger.info("Nada a fazer (arquivo ja processado anteriormente).")
+                outputs = run_local_job(config, source_path, dest_dir)
+                if outputs:
+                    logger.info("Concluido. Arquivos gerados: %s", [str(p) for p in outputs])
+                else:
+                    logger.info("Nada a fazer (arquivo ja processado anteriormente).")
         else:
             if not args.source.startswith("/"):
                 logger.error(
@@ -87,15 +103,32 @@ def main(argv: list[str] | None = None) -> int:
             client = DropboxClient(
                 config.dropbox_app_key, config.dropbox_app_secret, config.dropbox_refresh_token
             )
-            outputs = run_dropbox_job(config, client, args.source, args.dest)
-            if outputs:
-                logger.info("Concluido. Arquivos enviados ao Dropbox: %s", outputs)
+            if client.is_folder(args.source):
+                summary = run_dropbox_batch(
+                    config, client, args.source, args.dest, recursive=args.recursive
+                )
+                _log_batch_summary(logger, summary)
             else:
-                logger.info("Nada a fazer (arquivo ja processado anteriormente).")
+                outputs = run_dropbox_job(config, client, args.source, args.dest)
+                if outputs:
+                    logger.info("Concluido. Arquivos enviados ao Dropbox: %s", outputs)
+                else:
+                    logger.info("Nada a fazer (arquivo ja processado anteriormente).")
         return 0
     except Exception:
         logger.exception("Falha ao processar %s", args.source)
         return 1
+
+
+def _log_batch_summary(logger, summary: dict[str, list]) -> None:
+    logger.info(
+        "Lote concluido: %d processado(s), %d pulado(s) (ja concluidos), %d com falha.",
+        len(summary["processed"]),
+        len(summary["skipped"]),
+        len(summary["failed"]),
+    )
+    if summary["failed"]:
+        logger.warning("Arquivos com falha: %s", summary["failed"])
 
 
 if __name__ == "__main__":

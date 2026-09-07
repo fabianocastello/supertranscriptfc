@@ -11,3 +11,9 @@ dist/
 *.log
 .DS_Store
 ._.DS_Store
+.___*
+__DropBoxDEV
+SCRATCH_SUPER.txt
+env copy
+.env.*
+!.env.example

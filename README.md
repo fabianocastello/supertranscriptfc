@@ -1,8 +1,8 @@
 # SuperTranscriptFC
 
 Baixa um audio de uma pasta do Dropbox, transcreve, diariza as vozes por
-locutor (`Pessoa 1`, `Pessoa 2`, ...) e envia `.txt` / `.srt` / `.vtt` de
-volta ao Dropbox.
+locutor (`Pessoa 1`, `Pessoa 2`, ...) e envia `.transcriptFC.txt` / `.srt` /
+`.transcriptFC.vtt` de volta ao Dropbox.
 
 Cada maquina onde o projeto for instalado roda **de forma totalmente
 independente**: ambiente virtual proprio, modelos proprios baixados e

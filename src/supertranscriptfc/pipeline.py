@@ -118,7 +118,7 @@ def process_file(
     if config.write_srt:
         output_paths.append(write_srt(labeled_segments, output_dir / f"{output_stem}.srt"))
     if config.write_vtt:
-        output_paths.append(write_vtt(labeled_segments, output_dir / f"{output_stem}.vtt"))
+        output_paths.append(write_vtt(labeled_segments, output_dir / f"{output_stem}.transcriptFC.vtt"))
 
     state.mark_done("outputs_written", outputs=[str(p) for p in output_paths])
     logger.info("[%s] Saidas geradas: %s", job_id, [p.name for p in output_paths])

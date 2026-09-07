@@ -15,8 +15,7 @@ supertranscriptfc --source /caminho/ou/pasta/de/audio --local --model-size small
 
 ```bash
 sudo apt install -y python3-venv ffmpeg git
-gh auth login   # se ainda nao tiver o GitHub CLI configurado nesta maquina
-gh repo clone fabianocastello/supertranscriptfc ~/supertranscriptfc
+git clone https://github.com/fabianocastello/supertranscriptfc.git ~/supertranscriptfc
 cd ~/supertranscriptfc
 ./scripts/install.sh
 ```
@@ -54,9 +53,8 @@ etc), **não o remova** — apenas ignore-o e use sempre o caminho completo
 
 ```bash
 xcode-select --install                     # Command Line Tools, se ainda nao tiver
-/opt/homebrew/bin/brew install python@3.12 ffmpeg gh
-gh auth login
-gh repo clone fabianocastello/supertranscriptfc ~/supertranscriptfc
+/opt/homebrew/bin/brew install python@3.12 ffmpeg
+git clone https://github.com/fabianocastello/supertranscriptfc.git ~/supertranscriptfc
 cd ~/supertranscriptfc
 PYTHON_BIN=/opt/homebrew/bin/python3.12 ./scripts/install.sh
 ```
@@ -87,15 +85,14 @@ Depois, em **Configurações → Aplicativos → Configurações avançadas do
 aplicativo → Aliases de execução do aplicativo**, desligue `python.exe` e
 `python3.exe`. Feche e reabra o terminal, e confirme com `python --version`.
 
-**2. Git e GitHub CLI:**
+**2. Git:**
 ```powershell
-winget install Git.Git GitHub.cli
+winget install Git.Git
 ```
 
 **3. Clonar e instalar:**
 ```powershell
-gh auth login
-gh repo clone fabianocastello/supertranscriptfc C:\supertranscriptfc
+git clone https://github.com/fabianocastello/supertranscriptfc.git C:\supertranscriptfc
 cd C:\supertranscriptfc
 scripts\install.bat
 ```

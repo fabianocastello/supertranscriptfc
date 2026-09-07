@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import shutil
 import socket
+import time
 from datetime import datetime, timedelta
 from pathlib import Path, PurePosixPath
 
@@ -96,15 +97,18 @@ def process_file(
     )
 
     if not state.is_done("converted"):
+        stage_start = time.monotonic()
         convert_to_wav(input_path, wav_path)
-        state.mark_done("converted")
+        state.mark_done("converted", converted_seconds=time.monotonic() - stage_start)
     else:
         logger.info("[%s] Conversao ja concluida, pulando.", job_id)
+    conversion_seconds = state.data.get("converted_seconds", 0.0)
 
     audio_duration = probe_duration_seconds(wav_path)
     logger.info("[%s] Duracao do audio: %s", job_id, format_duration(audio_duration))
 
     if not state.is_done("transcribed"):
+        stage_start = time.monotonic()
         segments, detected_language = transcribe_audio(
             wav_path,
             model_size=config.model_size,
@@ -112,25 +116,35 @@ def process_file(
             compute_type=config.compute_type,
             language=config.language,
         )
+        transcription_seconds = time.monotonic() - stage_start
         transcript_data = [{"start": s.start, "end": s.end, "text": s.text} for s in segments]
-        state.mark_done("transcribed", transcript=transcript_data, language=detected_language)
+        state.mark_done(
+            "transcribed",
+            transcript=transcript_data,
+            language=detected_language,
+            transcribed_seconds=transcription_seconds,
+        )
     else:
         logger.info("[%s] Transcricao ja concluida, pulando.", job_id)
         transcript_data = state.data["transcript"]
         detected_language = state.data.get("language")
+    transcription_seconds = state.data.get("transcribed_seconds", 0.0)
 
     if not state.is_done("diarized"):
+        stage_start = time.monotonic()
         turns = diarize_audio(
             wav_path,
             hf_token=config.hf_token,
             min_speakers=config.min_speakers,
             max_speakers=config.max_speakers,
         )
+        diarization_seconds = time.monotonic() - stage_start
         turns_data = [{"start": t.start, "end": t.end, "speaker": t.speaker} for t in turns]
-        state.mark_done("diarized", turns=turns_data)
+        state.mark_done("diarized", turns=turns_data, diarized_seconds=diarization_seconds)
     else:
         logger.info("[%s] Diarizacao ja concluida, pulando.", job_id)
         turns_data = state.data["turns"]
+    diarization_seconds = state.data.get("diarized_seconds", 0.0)
 
     from .diarize import SpeakerTurn
     from .transcribe import TranscriptSegment
@@ -139,6 +153,7 @@ def process_file(
     turns = [SpeakerTurn(**t) for t in turns_data]
     labeled_segments = assign_speakers(segments, turns)
 
+    total_seconds = conversion_seconds + transcription_seconds + diarization_seconds
     metadata = {
         "system": "SuperTranscriptFC",
         "audio_file": input_path.name,
@@ -148,6 +163,10 @@ def process_file(
         "idioma": detected_language or config.language or "auto",
         "duracao_audio": format_duration(audio_duration),
         "locutores_detectados": len({s.speaker for s in labeled_segments}),
+        "tempo_conversao": format_duration(conversion_seconds),
+        "tempo_transcricao": format_duration(transcription_seconds),
+        "tempo_diarizacao": format_duration(diarization_seconds),
+        "tempo_total": format_duration(total_seconds),
     }
 
     output_paths: list[Path] = []

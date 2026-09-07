@@ -106,6 +106,18 @@ mas em `cmd.exe` puro, sem chamar PowerShell em nenhum momento:
 scripts\install-legacy.bat
 ```
 
+**Sem `git` instalado?** `curl.exe` e `tar.exe` já vêm embutidos no Windows
+10 (1803+) e 11 — dá pra baixar e atualizar o código sem instalar nada:
+```cmd
+curl -L -o supertranscriptfc.zip https://github.com/fabianocastello/supertranscriptfc/archive/refs/heads/main.zip
+tar -xf supertranscriptfc.zip
+cd supertranscriptfc-main
+scripts\install-legacy.bat
+```
+Depois, para atualizar (sem `git pull`), rode `scripts\update-nogit.bat` — ele
+baixa o ZIP mais recente, substitui os arquivos (preservando `.venv` e
+`.env`) e já roda o comando que você passar.
+
 **Uso diário:**
 ```cmd
 .venv\Scripts\activate.bat

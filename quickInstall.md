@@ -99,6 +99,13 @@ scripts\install.bat
 (`install.bat` funciona tanto no `cmd` quanto no PowerShell — é só um atalho
 que chama `install.ps1` contornando a política de execução padrão.)
 
+**Máquina antiga ou com PowerShell bloqueado por política?** Use
+`scripts\install-legacy.bat` no lugar do passo acima — faz a mesma coisa,
+mas em `cmd.exe` puro, sem chamar PowerShell em nenhum momento:
+```cmd
+scripts\install-legacy.bat
+```
+
 **Uso diário:**
 ```cmd
 .venv\Scripts\activate.bat

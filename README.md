@@ -34,6 +34,9 @@ No PowerShell:
 .\scripts\install.ps1
 ```
 
+Ou de' duplo-clique em `scripts\install.bat` (wrapper que chama o script acima
+contornando a politica de execucao padrao do PowerShell).
+
 Instala `torch` CPU-only (ps20 nao tem GPU dedicada).
 
 Depois de instalar em qualquer plataforma, edite o arquivo `.env` criado a

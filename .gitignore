@@ -17,3 +17,4 @@ SCRATCH_SUPER.txt
 env copy
 .env.*
 !.env.example
+scripts/folders.txt

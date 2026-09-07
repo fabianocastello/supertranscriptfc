@@ -39,6 +39,30 @@ def _is_lock_stale(lock_content: str) -> bool:
     return datetime.now() - locked_at > LOCK_STALE_AFTER
 
 
+def _local_target(source: Path, dest_dir: Path | None) -> tuple[str, Path, Path, Path]:
+    """Calcula, para um audio local, o nome base de saida e os caminhos onde
+    o transcript e o lock (se existirem) estariam no destino."""
+    source = source.resolve()
+    resolved_dest_dir = (dest_dir or source.parent).resolve()
+    stem = build_output_stem(source.stem, source.parent.name)
+    transcript_path = resolved_dest_dir / f"{stem}.transcriptFC.txt"
+    lock_path = resolved_dest_dir / f"{stem}.transcriptFC.lock"
+    return stem, resolved_dest_dir, transcript_path, lock_path
+
+
+def _dropbox_target(source_path: str, dest_folder: str | None) -> tuple[str, str, str, str]:
+    """Calcula, para um audio do Dropbox, o nome base de saida e os caminhos
+    remotos onde o transcript e o lock (se existirem) estariam no destino."""
+    source_purepath = PurePosixPath(source_path)
+    stem = build_output_stem(source_purepath.stem, source_purepath.parent.name)
+    resolved_dest_folder = dest_folder or str(source_purepath.parent)
+    if resolved_dest_folder != "/":
+        resolved_dest_folder = resolved_dest_folder.rstrip("/")
+    transcript_path = f"{resolved_dest_folder}/{stem}.transcriptFC.txt"
+    lock_path = f"{resolved_dest_folder}/{stem}.transcriptFC.lock"
+    return stem, resolved_dest_folder, transcript_path, lock_path
+
+
 def process_file(
     config: Config,
     input_path: Path,
@@ -140,14 +164,12 @@ def run_local_job(config: Config, source: Path, dest_dir: Path | None) -> list[P
     (ou para a pasta do arquivo de origem, se dest_dir nao for informado).
     O arquivo de origem nunca e' removido."""
     config.ensure_dirs()
+    output_stem, dest_dir, transcript_path, _lock_path = _local_target(source, dest_dir)
     source = source.resolve()
-    dest_dir = (dest_dir or source.parent).resolve()
     source_ref = f"local:{source}"
     job_id = compute_job_id(source_ref)
     registry = ProcessedRegistry(config.state_file)
 
-    output_stem = build_output_stem(source.stem, source.parent.name)
-    transcript_path = dest_dir / f"{output_stem}.transcriptFC.txt"
     if transcript_path.exists() and not config.force:
         logger.info("Transcricao ja existe (%s), pulando: %s", transcript_path.name, source)
         return []
@@ -178,18 +200,14 @@ def run_dropbox_job(config: Config, dropbox_client, source_path: str, dest_folde
     job_id = compute_job_id(source_ref)
     registry = ProcessedRegistry(config.state_file)
 
-    source_purepath = PurePosixPath(source_path)
-    stem = build_output_stem(source_purepath.stem, source_purepath.parent.name)
-    dest_folder = dest_folder or str(source_purepath.parent)
-    if dest_folder != "/":
-        dest_folder = dest_folder.rstrip("/")
+    stem, dest_folder, transcript_remote_path, lock_remote_path = _dropbox_target(
+        source_path, dest_folder
+    )
 
-    transcript_remote_path = f"{dest_folder}/{stem}.transcriptFC.txt"
     if not config.force and dropbox_client.file_exists(transcript_remote_path):
         logger.info("Transcricao ja existe (%s), pulando: %s", transcript_remote_path, source_path)
         return []
 
-    lock_remote_path = f"{dest_folder}/{stem}.transcriptFC.lock"
     if not config.force:
         lock_content = dropbox_client.read_text_file(lock_remote_path)
         if lock_content and not _is_lock_stale(lock_content):
@@ -258,11 +276,31 @@ def run_local_batch(
     os arquivos processados, pulados (ja concluidos) e com erro."""
     source_dir = source_dir.resolve()
     files = _iter_local_audio_files(source_dir, recursive)
-    logger.info("Encontrados %d arquivo(s) de audio em %s", len(files), source_dir)
+
+    to_work_on: list[Path] = []
+    n_transcript = 0
+    n_lock = 0
+    for audio_path in files:
+        _, _, transcript_path, lock_path = _local_target(audio_path, dest_dir)
+        has_transcript = transcript_path.exists()
+        has_lock = lock_path.exists()
+        n_transcript += has_transcript
+        n_lock += has_lock
+        if config.force or not (has_transcript or has_lock):
+            to_work_on.append(audio_path)
+
+    logger.info(
+        "%s: %d audio, %d transcript, %d locks, %d to work on",
+        source_dir,
+        len(files),
+        n_transcript,
+        n_lock,
+        len(to_work_on),
+    )
 
     summary: dict[str, list] = {"processed": [], "skipped": [], "failed": []}
-    for i, audio_path in enumerate(files, start=1):
-        logger.info("--- Arquivo %d/%d: %s ---", i, len(files), audio_path.name)
+    for i, audio_path in enumerate(to_work_on, start=1):
+        logger.info("--- Arquivo %d/%d: %s ---", i, len(to_work_on), audio_path.name)
         try:
             outputs = run_local_job(config, audio_path, dest_dir)
         except Exception:
@@ -287,11 +325,34 @@ def run_dropbox_batch(
     para o proximo arquivo mesmo se um deles falhar; retorna um resumo com
     os arquivos processados, pulados (ja concluidos) e com erro."""
     files = dropbox_client.list_audio_files(source_folder, recursive=recursive)
-    logger.info("Encontrados %d arquivo(s) de audio em %s", len(files), source_folder)
+
+    to_work_on: list[str] = []
+    n_transcript = 0
+    n_lock = 0
+    for audio_path in files:
+        _, _, transcript_path, lock_path = _dropbox_target(audio_path, dest_folder)
+        has_transcript = dropbox_client.file_exists(transcript_path)
+        has_lock = False
+        if not has_transcript:
+            lock_content = dropbox_client.read_text_file(lock_path)
+            has_lock = bool(lock_content) and not _is_lock_stale(lock_content)
+        n_transcript += has_transcript
+        n_lock += has_lock
+        if config.force or not (has_transcript or has_lock):
+            to_work_on.append(audio_path)
+
+    logger.info(
+        "%s: %d audio, %d transcript, %d locks, %d to work on",
+        source_folder,
+        len(files),
+        n_transcript,
+        n_lock,
+        len(to_work_on),
+    )
 
     summary: dict[str, list] = {"processed": [], "skipped": [], "failed": []}
-    for i, audio_path in enumerate(files, start=1):
-        logger.info("--- Arquivo %d/%d: %s ---", i, len(files), audio_path)
+    for i, audio_path in enumerate(to_work_on, start=1):
+        logger.info("--- Arquivo %d/%d: %s ---", i, len(to_work_on), audio_path)
         try:
             outputs = run_dropbox_job(config, dropbox_client, audio_path, dest_folder)
         except Exception:

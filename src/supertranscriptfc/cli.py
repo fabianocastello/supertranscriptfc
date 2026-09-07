@@ -71,6 +71,13 @@ def main(argv: list[str] | None = None) -> int:
     config.ensure_dirs()
     logger = setup_logging(config.logs_dir, verbose=args.verbose)
 
+    if not config.hf_token:
+        logger.error(
+            "HF_TOKEN nao configurado (necessario para a diarizacao com pyannote.audio). "
+            "Preencha-o no .env antes de rodar (veja .env.example)."
+        )
+        return 1
+
     try:
         if args.local:
             dest_dir = Path(args.dest) if args.dest else None

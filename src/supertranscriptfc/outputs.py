@@ -21,8 +21,27 @@ def _format_vtt_timestamp(seconds: float) -> str:
     return f"{hours:02d}:{minutes:02d}:{secs:02d}.{millis:03d}"
 
 
-def write_txt(segments: list[LabeledSegment], path: Path) -> Path:
-    """Texto corrido, agrupando linhas consecutivas do mesmo locutor."""
+def _format_yaml_value(value) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int):
+        return str(value)
+    text = str(value).replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{text}"'
+
+
+def format_front_matter(metadata: dict) -> str:
+    """Bloco YAML de front-matter, com 'system' sempre como primeiro campo
+    (a ordem de insercao do dict e' preservada)."""
+    lines = ["---"]
+    lines.extend(f"{key}: {_format_yaml_value(value)}" for key, value in metadata.items())
+    lines.append("---")
+    return "\n".join(lines) + "\n\n"
+
+
+def write_txt(segments: list[LabeledSegment], path: Path, metadata: dict | None = None) -> Path:
+    """Texto corrido, agrupando linhas consecutivas do mesmo locutor. Se
+    'metadata' for informado, prefixa o arquivo com um front-matter YAML."""
     path.parent.mkdir(parents=True, exist_ok=True)
     lines: list[str] = []
     current_speaker = None
@@ -40,7 +59,8 @@ def write_txt(segments: list[LabeledSegment], path: Path) -> Path:
         buffer.append(seg.text)
     flush()
 
-    path.write_text("\n\n".join(lines) + "\n", encoding="utf-8")
+    front_matter = format_front_matter(metadata) if metadata else ""
+    path.write_text(front_matter + "\n\n".join(lines) + "\n", encoding="utf-8")
     return path
 
 

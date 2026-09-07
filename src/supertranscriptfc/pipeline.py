@@ -105,7 +105,7 @@ def process_file(
     logger.info("[%s] Duracao do audio: %s", job_id, format_duration(audio_duration))
 
     if not state.is_done("transcribed"):
-        segments = transcribe_audio(
+        segments, detected_language = transcribe_audio(
             wav_path,
             model_size=config.model_size,
             device=config.device,
@@ -113,10 +113,11 @@ def process_file(
             language=config.language,
         )
         transcript_data = [{"start": s.start, "end": s.end, "text": s.text} for s in segments]
-        state.mark_done("transcribed", transcript=transcript_data)
+        state.mark_done("transcribed", transcript=transcript_data, language=detected_language)
     else:
         logger.info("[%s] Transcricao ja concluida, pulando.", job_id)
         transcript_data = state.data["transcript"]
+        detected_language = state.data.get("language")
 
     if not state.is_done("diarized"):
         turns = diarize_audio(
@@ -138,9 +139,22 @@ def process_file(
     turns = [SpeakerTurn(**t) for t in turns_data]
     labeled_segments = assign_speakers(segments, turns)
 
+    metadata = {
+        "system": "SuperTranscriptFC",
+        "audio_file": input_path.name,
+        "processado": datetime.now().strftime("%Y-%m-%d"),
+        "running_on": socket.gethostname(),
+        "modelo": config.model_size,
+        "idioma": detected_language or config.language or "auto",
+        "duracao_audio": format_duration(audio_duration),
+        "locutores_detectados": len({s.speaker for s in labeled_segments}),
+    }
+
     output_paths: list[Path] = []
     if config.write_txt:
-        output_paths.append(write_txt(labeled_segments, output_dir / f"{output_stem}.transcriptFC.txt"))
+        output_paths.append(
+            write_txt(labeled_segments, output_dir / f"{output_stem}.transcriptFC.txt", metadata=metadata)
+        )
     if config.write_srt:
         output_paths.append(write_srt(labeled_segments, output_dir / f"{output_stem}.srt"))
     if config.write_vtt:

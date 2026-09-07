@@ -70,7 +70,7 @@ def transcribe_audio(
     device: str = "auto",
     compute_type: str = "auto",
     language: str | None = None,
-) -> list[TranscriptSegment]:
+) -> tuple[list[TranscriptSegment], str]:
     """Transcreve um WAV usando faster-whisper. Import de faster_whisper e' feito
     aqui dentro para nao exigir a dependencia pesada so' para importar o pacote."""
     _ensure_cuda_libs_on_path()
@@ -105,4 +105,4 @@ def transcribe_audio(
     progress.finish()
 
     logger.info("Transcricao concluida: %d segmentos", len(segments))
-    return segments
+    return segments, info.language

@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from supertranscriptfc.merge import LabeledSegment
-from supertranscriptfc.outputs import write_srt, write_txt, write_vtt
+from supertranscriptfc.outputs import format_front_matter, write_srt, write_txt, write_vtt
 
 
 def make_segments():
@@ -19,6 +19,43 @@ def test_write_txt_groups_consecutive_same_speaker(tmp_path: Path):
         "Pessoa 1: Ola, tudo bem?\n\n"
         "Pessoa 2: Tudo bem, e voce? Tambem estou bem.\n"
     )
+
+
+def test_write_txt_without_metadata_has_no_front_matter(tmp_path: Path):
+    out = write_txt(make_segments(), tmp_path / "out.txt")
+    content = out.read_text(encoding="utf-8")
+    assert not content.startswith("---")
+
+
+def test_write_txt_with_metadata_prepends_yaml_front_matter(tmp_path: Path):
+    metadata = {
+        "system": "SuperTranscriptFC",
+        "audio_file": "audio.mp3",
+        "processado": "2026-09-07",
+        "running_on": "thor25",
+        "locutores_detectados": 2,
+    }
+    out = write_txt(make_segments(), tmp_path / "out.txt", metadata=metadata)
+    content = out.read_text(encoding="utf-8")
+
+    lines = content.splitlines()
+    assert lines[0] == "---"
+    assert lines[1] == 'system: "SuperTranscriptFC"'
+    assert 'audio_file: "audio.mp3"' in content
+    assert 'running_on: "thor25"' in content
+    assert "locutores_detectados: 2" in content
+    assert content.count("---") == 2
+    assert "Pessoa 1: Ola, tudo bem?" in content
+
+
+def test_format_front_matter_preserves_dict_insertion_order():
+    # "system" deve vir primeiro porque quem monta o dict (pipeline.py) o
+    # insere primeiro; format_front_matter so' preserva a ordem, nao reordena.
+    front_matter = format_front_matter({"system": "SuperTranscriptFC", "other": "x"})
+    lines = front_matter.splitlines()
+    assert lines[0] == "---"
+    assert lines[1] == 'system: "SuperTranscriptFC"'
+    assert lines[2] == 'other: "x"'
 
 
 def test_write_srt_format(tmp_path: Path):

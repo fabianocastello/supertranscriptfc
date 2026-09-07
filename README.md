@@ -10,6 +10,9 @@ armazenados em `~/.supertranscriptfc/models` (Linux/macOS) ou
 `%USERPROFILE%\.supertranscriptfc\models` (Windows). Nao ha nenhum modelo ou
 cache compartilhado entre maquinas.
 
+Para instalar rapido em Linux, macOS ou Windows, veja o
+[quickInstall.md](quickInstall.md).
+
 ## Instalacao
 
 Pre-requisitos em qualquer maquina: Python 3.10+ e FFmpeg no PATH.

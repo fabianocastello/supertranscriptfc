@@ -25,14 +25,16 @@ LOCK_STALE_AFTER = timedelta(hours=36)
 
 
 def _make_lock_content() -> str:
-    return f"{socket.gethostname()} {datetime.now().isoformat()}"
+    hostname = socket.gethostname()
+    started_at = datetime.now().isoformat()
+    return f"Processando por: {hostname}\nIniciado em: {started_at}\n"
 
 
 def _is_lock_stale(lock_content: str) -> bool:
     try:
-        _host, iso_timestamp = lock_content.rsplit(" ", 1)
+        iso_timestamp = lock_content.splitlines()[1].split("Iniciado em: ", 1)[1]
         locked_at = datetime.fromisoformat(iso_timestamp)
-    except ValueError:
+    except (IndexError, ValueError):
         return True
     return datetime.now() - locked_at > LOCK_STALE_AFTER
 

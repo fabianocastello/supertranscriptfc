@@ -51,6 +51,18 @@ partir de `.env.example` e preencha:
 
 ## Uso
 
+Antes de qualquer comando abaixo, ative o ambiente virtual:
+
+```bash
+source .venv/bin/activate          # Linux/macOS
+```
+```cmd
+.venv\Scripts\activate.bat         :: Windows, no cmd.exe
+```
+```powershell
+.venv\Scripts\Activate.ps1         # Windows, no PowerShell
+```
+
 Processar um arquivo local (sem tocar no Dropbox — util para testar):
 
 ```bash

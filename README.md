@@ -86,9 +86,10 @@ supertranscriptfc --source /Gravacoes/reuniao.mp3 --dest /Gravacoes/Transcricoes
 ```
 
 Outras opcoes uteis: `--model-size`, `--device {auto,cpu,cuda}`,
-`--language pt`, `--min-speakers`, `--max-speakers`, `--vtt` (gera `.vtt`
-tambem), `--keep-temp` (nao apaga temporarios), `--force` (reprocessa mesmo
-se ja tiver sido concluido antes).
+`--language pt`, `--min-speakers`, `--max-speakers`, `--min-minutes` /
+`--max-minutes` (ignora audios fora dessa faixa de duracao — pode usar um,
+outro ou ambos), `--vtt` (gera `.vtt` tambem), `--keep-temp` (nao apaga
+temporarios), `--force` (reprocessa mesmo se ja tiver sido concluido antes).
 
 ## Retomada e idempotencia
 

@@ -37,6 +37,9 @@ class Config:
     min_speakers: int | None = None
     max_speakers: int | None = None
 
+    min_minutes: float | None = None  # ignora audios mais curtos que isso
+    max_minutes: float | None = None  # ignora audios mais longos que isso
+
     write_txt: bool = True
     write_srt: bool = True
     write_vtt: bool = False

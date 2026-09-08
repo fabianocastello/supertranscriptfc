@@ -107,6 +107,24 @@ def process_file(
     audio_duration = probe_duration_seconds(wav_path)
     logger.info("[%s] Duracao do audio: %s", job_id, format_duration(audio_duration))
 
+    audio_minutes = audio_duration / 60
+    if config.min_minutes is not None and audio_minutes < config.min_minutes:
+        logger.info(
+            "[%s] Audio mais curto que o minimo configurado (%s < %.1f min), ignorando.",
+            job_id,
+            format_duration(audio_duration),
+            config.min_minutes,
+        )
+        return []
+    if config.max_minutes is not None and audio_minutes > config.max_minutes:
+        logger.info(
+            "[%s] Audio mais longo que o maximo configurado (%s > %.1f min), ignorando.",
+            job_id,
+            format_duration(audio_duration),
+            config.max_minutes,
+        )
+        return []
+
     if not state.is_done("transcribed"):
         stage_start = time.monotonic()
         segments, detected_language = transcribe_audio(

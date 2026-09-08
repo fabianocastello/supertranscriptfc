@@ -42,6 +42,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--language", default=None, help="Codigo do idioma (ex: pt). Default: deteccao automatica.")
     parser.add_argument("--min-speakers", type=int, default=None)
     parser.add_argument("--max-speakers", type=int, default=None)
+    parser.add_argument(
+        "--min-minutes",
+        type=float,
+        default=None,
+        help="Ignora audios com duracao menor que isso (em minutos).",
+    )
+    parser.add_argument(
+        "--max-minutes",
+        type=float,
+        default=None,
+        help="Ignora audios com duracao maior que isso (em minutos).",
+    )
     parser.add_argument("--vtt", action="store_true", help="Tambem gerar arquivo .vtt.")
     parser.add_argument("--no-txt", action="store_true", help="Nao gerar arquivo .txt.")
     parser.add_argument("--no-srt", action="store_true", help="Nao gerar arquivo .srt.")
@@ -62,6 +74,8 @@ def main(argv: list[str] | None = None) -> int:
         language=args.language,
         min_speakers=args.min_speakers,
         max_speakers=args.max_speakers,
+        min_minutes=args.min_minutes,
+        max_minutes=args.max_minutes,
         write_txt=not args.no_txt,
         write_srt=not args.no_srt,
         write_vtt=args.vtt,
@@ -90,7 +104,7 @@ def main(argv: list[str] | None = None) -> int:
                 if outputs:
                     logger.info("Concluido. Arquivos gerados: %s", [str(p) for p in outputs])
                 else:
-                    logger.info("Nada a fazer (arquivo ja processado anteriormente).")
+                    logger.info("Nada a fazer (ja processado, em andamento em outra maquina, ou fora dos limites de duracao configurados).")
         else:
             if not args.source.startswith("/"):
                 logger.error(
@@ -120,7 +134,7 @@ def main(argv: list[str] | None = None) -> int:
                 if outputs:
                     logger.info("Concluido. Arquivos enviados ao Dropbox: %s", outputs)
                 else:
-                    logger.info("Nada a fazer (arquivo ja processado anteriormente).")
+                    logger.info("Nada a fazer (ja processado, em andamento em outra maquina, ou fora dos limites de duracao configurados).")
         return 0
     except Exception:
         logger.exception("Falha ao processar %s", args.source)

@@ -2,7 +2,7 @@
 
 Baixa um audio de uma pasta do Dropbox, transcreve, diariza as vozes por
 locutor (`Pessoa 1`, `Pessoa 2`, ...) e envia `.transcriptFC.txt` / `.srt` /
-`.transcriptFC.vtt` de volta ao Dropbox.
+`.voxcelfc.vtt` de volta ao Dropbox.
 
 `voxelfc` e o nome tecnico do produto. Durante a migracao, o comando legado
 `supertranscriptfc` continua disponivel como alias depreciado. O
@@ -111,7 +111,7 @@ python scripts/migrate_home.py --from ~/.supertranscriptfc --to ~/.voxelfc
 
 O diretorio antigo nao e apagado. Em caso de rollback, defina
 `VOXELFC_HOME=~/.supertranscriptfc`. Os nomes Dropbox `.transcriptFC.txt`,
-`.transcriptFC.srt`, `.transcriptFC.vtt` e `.transcriptFC.lock` permanecem
+`.srt`, `.voxcelfc.vtt` e `.transcriptFC.lock` permanecem
 estaveis para que audios ja processados nao sejam executados novamente.
 
 

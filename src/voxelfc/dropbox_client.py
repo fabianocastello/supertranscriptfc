@@ -60,6 +60,25 @@ class DropboxClient:
         ]
         return sorted(paths)
 
+    def list_files_matching_stem(self, folder_path: str, stem: str) -> list[str]:
+        """Lists every file directly in folder_path whose name starts with
+        '<stem>.' - used by --archive to move all related files together,
+        not just the ones a given run happened to produce."""
+        folder_path = folder_path.rstrip("/") or "/"
+        list_path = "" if folder_path == "/" else folder_path
+        entries = []
+        result = self.dbx.files_list_folder(list_path)
+        entries.extend(result.entries)
+        while result.has_more:
+            result = self.dbx.files_list_folder_continue(result.cursor)
+            entries.extend(result.entries)
+
+        FileMetadata = self._dbx_module.files.FileMetadata
+        prefix = f"{stem}."
+        return sorted(
+            e.path_display for e in entries if isinstance(e, FileMetadata) and e.name.startswith(prefix)
+        )
+
     def download_file(self, dropbox_path: str, local_path: Path) -> Path:
         local_path.parent.mkdir(parents=True, exist_ok=True)
         logger.info("Baixando do Dropbox: %s -> %s", dropbox_path, local_path)

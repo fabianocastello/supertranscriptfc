@@ -1,13 +1,13 @@
-# Instalador do SuperTranscriptFC para Windows (ex: ps20).
+# Instalador do VOXEL FC para Windows (ex: ps20).
 # Cada maquina roda de forma totalmente independente: venv proprio, modelos
-# proprios em $HOME\.supertranscriptfc\models. Nada e' compartilhado pela rede.
+# proprios em $HOME\.voxelfc\models. Nada e' compartilhado pela rede.
 
 $ErrorActionPreference = "Stop"
 
 $RepoDir = Split-Path -Parent $PSScriptRoot
 Set-Location $RepoDir
 
-Write-Host "== SuperTranscriptFC: instalacao (Windows) =="
+Write-Host "== VOXEL FC: instalacao (Windows) =="
 
 # --- 1. Verificar Python 3.10+ ---
 $python = Get-Command python -ErrorAction SilentlyContinue
@@ -54,7 +54,7 @@ if (-not (Test-Path ".env")) {
 
 Write-Host ""
 Write-Host "Instalacao concluida nesta maquina."
-Write-Host "Modelos e cache ficarao em: $HOME\.supertranscriptfc\models"
+Write-Host "Modelos e cache ficarao em: $HOME\.voxelfc\models"
 Write-Host "Para usar:"
 Write-Host "  .\.venv\Scripts\Activate.ps1"
-Write-Host "  supertranscriptfc --source C:\caminho\audio.mp3 --local"
+Write-Host "  voxelfc --source C:\caminho\audio.mp3 --local"

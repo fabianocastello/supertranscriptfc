@@ -1,5 +1,5 @@
 @echo off
-REM Instalador do SuperTranscriptFC para Windows usando so' cmd.exe puro,
+REM Instalador do VOXEL FC para Windows usando so' cmd.exe puro,
 REM sem chamar PowerShell em nenhum momento. Para maquinas antigas ou com
 REM politica de execucao de scripts PowerShell restrita/bloqueada.
 setlocal enabledelayedexpansion
@@ -7,7 +7,7 @@ setlocal enabledelayedexpansion
 set "REPO_DIR=%~dp0.."
 cd /d "%REPO_DIR%"
 
-echo == SuperTranscriptFC: instalacao (Windows, cmd puro) ==
+echo == VOXEL FC: instalacao (Windows, cmd puro) ==
 
 REM --- 1. Verificar Python ---
 where python >nul 2>&1
@@ -66,10 +66,10 @@ if not exist ".env" (
 
 echo.
 echo Instalacao concluida nesta maquina.
-echo Modelos e cache ficarao em: %USERPROFILE%\.supertranscriptfc\models
+echo Modelos e cache ficarao em: %USERPROFILE%\.voxelfc\models
 echo Para usar:
 echo   .venv\Scripts\activate.bat
-echo   supertranscriptfc --source C:\caminho\audio.mp3 --local
+echo   voxelfc --source C:\caminho\audio.mp3 --local
 pause
 exit /b 0
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Instalador do SuperTranscriptFC para Linux (thor25, leno18) e macOS (MacBook Air M1).
+# Instalador do VOXEL FC para Linux (thor25, leno18) e macOS (MacBook Air M1).
 # Cada maquina roda de forma totalmente independente: venv proprio, modelos
-# proprios em ~/.supertranscriptfc/models. Nada e' compartilhado pela rede.
+# proprios em ~/.voxelfc/models. Nada e' compartilhado pela rede.
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -9,7 +9,7 @@ cd "$REPO_DIR"
 
 OS="$(uname -s)"
 
-echo "== SuperTranscriptFC: instalacao (${OS}) =="
+echo "== VOXEL FC: instalacao (${OS}) =="
 
 # --- 1. Verificar Python 3.10+ ---
 PYTHON_BIN="${PYTHON_BIN:-python3}"
@@ -67,7 +67,7 @@ fi
 
 echo ""
 echo "Instalacao concluida nesta maquina."
-echo "Modelos e cache ficarao em: ~/.supertranscriptfc/models"
+echo "Modelos e cache ficarao em: ~/.voxelfc/models"
 echo "Para usar:"
 echo "  source .venv/bin/activate"
-echo "  supertranscriptfc --source /caminho/audio.mp3 --local"
+echo "  voxelfc --source /caminho/audio.mp3 --local"

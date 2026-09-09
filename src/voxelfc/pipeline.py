@@ -17,7 +17,7 @@ from .progress import format_duration
 from .state import JobState, ProcessedRegistry, compute_job_id
 from .transcribe import transcribe_audio
 
-logger = logging.getLogger("supertranscriptfc")
+logger = logging.getLogger("voxelfc")
 
 # Um processamento longo (audio de varias horas em CPU) pode legitimamente
 # levar mais de um dia; alem disso consideramos o lock abandonado (ex: a
@@ -173,7 +173,7 @@ def process_file(
 
     total_seconds = conversion_seconds + transcription_seconds + diarization_seconds
     metadata = {
-        "system": "SuperTranscriptFC",
+        "system": "VOXEL FC",
         "audio_file": input_path.name,
         "processado": datetime.now().strftime("%Y-%m-%d"),
         "running_on": socket.gethostname(),

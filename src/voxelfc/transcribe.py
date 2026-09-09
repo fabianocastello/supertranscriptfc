@@ -8,7 +8,7 @@ from pathlib import Path
 
 from .progress import ProgressPrinter
 
-logger = logging.getLogger("supertranscriptfc")
+logger = logging.getLogger("voxelfc")
 
 
 def _ensure_cuda_libs_on_path() -> None:

@@ -1,13 +1,16 @@
-# SuperTranscriptFC
+# VOXEL FC — File Companion
 
 Baixa um audio de uma pasta do Dropbox, transcreve, diariza as vozes por
 locutor (`Pessoa 1`, `Pessoa 2`, ...) e envia `.transcriptFC.txt` / `.srt` /
 `.transcriptFC.vtt` de volta ao Dropbox.
 
+`voxelfc` e o nome tecnico do produto. Durante a migracao, o comando legado
+`supertranscriptfc` continua disponivel como alias depreciado.
+
 Cada maquina onde o projeto for instalado roda **de forma totalmente
 independente**: ambiente virtual proprio, modelos proprios baixados e
-armazenados em `~/.supertranscriptfc/models` (Linux/macOS) ou
-`%USERPROFILE%\.supertranscriptfc\models` (Windows). Nao ha nenhum modelo ou
+armazenados em `~/.voxelfc/models` (Linux/macOS) ou
+`%USERPROFILE%\.voxelfc\models` (Windows). Nao ha nenhum modelo ou
 cache compartilhado entre maquinas.
 
 Para instalar rapido em Linux, macOS ou Windows, veja o
@@ -69,20 +72,20 @@ source .venv/bin/activate          # Linux/macOS
 Processar um arquivo local (sem tocar no Dropbox — util para testar):
 
 ```bash
-supertranscriptfc --source /caminho/audio.mp3 --local
+voxelfc --source /caminho/audio.mp3 --local
 ```
 
 Processar um arquivo do Dropbox (baixa, processa e envia de volta para a
 mesma pasta de origem):
 
 ```bash
-supertranscriptfc --source /Gravacoes/reuniao.mp3
+voxelfc --source /Gravacoes/reuniao.mp3
 ```
 
 Especificando uma pasta de destino diferente no Dropbox:
 
 ```bash
-supertranscriptfc --source /Gravacoes/reuniao.mp3 --dest /Gravacoes/Transcricoes
+voxelfc --source /Gravacoes/reuniao.mp3 --dest /Gravacoes/Transcricoes
 ```
 
 Outras opcoes uteis: `--model-size`, `--device {auto,cpu,cuda}`,
@@ -91,22 +94,38 @@ Outras opcoes uteis: `--model-size`, `--device {auto,cpu,cuda}`,
 outro ou ambos), `--vtt` (gera `.vtt` tambem), `--keep-temp` (nao apaga
 temporarios), `--force` (reprocessa mesmo se ja tiver sido concluido antes).
 
-## Retomada e idempotencia
+## Compatibilidade e migracao
+
+Novas instalacoes usam `~/.voxelfc` e a variavel `VOXELFC_HOME`. Instalacoes
+existentes que ainda possuem `~/.supertranscriptfc` sao preservadas e podem ser
+usadas automaticamente durante a transicao. Para migrar deliberadamente,
+pare os workers e simule primeiro:
+
+```bash
+python scripts/migrate_home.py --from ~/.supertranscriptfc --to ~/.voxelfc --dry-run
+python scripts/migrate_home.py --from ~/.supertranscriptfc --to ~/.voxelfc
+```
+
+O diretorio antigo nao e apagado. Em caso de rollback, defina
+`VOXELFC_HOME=~/.supertranscriptfc`. Os nomes Dropbox `.transcriptFC.txt`,
+`.transcriptFC.srt`, `.transcriptFC.vtt` e `.transcriptFC.lock` permanecem
+estaveis para que audios ja processados nao sejam executados novamente.
+
 
 Cada etapa (download, conversao, transcricao, diarizacao, saidas, upload) e'
-marcada em `~/.supertranscriptfc/tmp/<job_id>/progress.json`. Se o processo
+marcada em `~/.voxelfc/tmp/<job_id>/progress.json`. Se o processo
 for interrompido, rodar o mesmo comando novamente retoma de onde parou, sem
 refazer etapas concluidas.
 
 Arquivos ja processados com sucesso ficam registrados em
-`~/.supertranscriptfc/processed_files.json` e nao sao reprocessados nas
+`~/.voxelfc/processed_files.json` e nao sao reprocessados nas
 execucoes seguintes (a menos que `--force` seja usado), mesmo depois que os
 temporarios daquele job forem removidos.
 
 ## Espaco em disco esperado
 
-- ~20 GB permanentes em `~/.supertranscriptfc/models` para os modelos.
-- ~10 GB temporarios por processamento em `~/.supertranscriptfc/tmp`
+- ~20 GB permanentes em `~/.voxelfc/models` para os modelos.
+- ~10 GB temporarios por processamento em `~/.voxelfc/tmp`
   (audio original + WAV intermediario), removidos automaticamente ao final
   a menos que `--keep-temp` seja usado.
 

@@ -1,165 +1,280 @@
-# Instalação rápida — SuperTranscriptFC
+# Quick guide — VOXEL FC
 
-Guia direto ao ponto para instalar em Linux, macOS ou Windows. Para detalhes,
-uso avançado e solução de problemas mais a fundo, veja o [README](README.md).
+Este guia cobre a instalação mínima e os comandos operacionais do projeto:
 
-Em qualquer plataforma, ao final você deve conseguir rodar:
+- processar áudios e gerar transcripts;
+- consultar locks ativos no Dropbox;
+- remover locks antigos com segurança.
 
-```
-supertranscriptfc --source /caminho/ou/pasta/de/audio --local --model-size small --language pt
-```
-
----
-
-## Linux (Debian/Ubuntu, ex: thor25, leno18)
-
-```bash
-sudo apt install -y python3-venv ffmpeg git
-git clone https://github.com/fabianocastello/supertranscriptfc.git ~/supertranscriptfc
-cd ~/supertranscriptfc
-./scripts/install.sh
-```
-
-O `install.sh` detecta automaticamente se há GPU NVIDIA (`nvidia-smi`) e
-instala o `torch` com CUDA nesse caso, ou a variante CPU-only caso contrário.
-
-**Uso diário:**
-```bash
-source .venv/bin/activate
-supertranscriptfc --source /caminho/audio.mp3 --local
-```
+Para a descrição completa do pipeline, veja o [README.md](README.md).
 
 ---
 
-## macOS (Apple Silicon, ex: MacBook Air M1)
+## 1. Pré-requisitos
 
-**Antes de tudo**, confirme que o Homebrew é nativo arm64 (não uma instalação
-x86_64 rodando via Rosetta 2 — isso já causou dor de cabeça real neste
-projeto):
+### Linux (Debian/Ubuntu)
 
 ```bash
-arch                          # deve mostrar "arm64"
-ls /opt/homebrew/bin/brew     # deve existir
+sudo apt update
+sudo apt install -y python3 python3-venv ffmpeg git
 ```
 
-Se `/opt/homebrew/bin/brew` não existir, instale o Homebrew primeiro:
-```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-```
+### macOS (Apple Silicon)
 
-Se existir **outro** Homebrew em `/usr/local` com apps que você usa (iTerm2,
-etc), **não o remova** — apenas ignore-o e use sempre o caminho completo
-`/opt/homebrew/bin/brew` abaixo, para não misturar as duas instalações.
+Confirme que o terminal está usando o Homebrew nativo arm64:
 
 ```bash
-xcode-select --install                     # Command Line Tools, se ainda nao tiver
-/opt/homebrew/bin/brew install python@3.12 ffmpeg
-git clone https://github.com/fabianocastello/supertranscriptfc.git ~/supertranscriptfc
-cd ~/supertranscriptfc
-PYTHON_BIN=/opt/homebrew/bin/python3.12 ./scripts/install.sh
+arch
+/opt/homebrew/bin/brew --version
 ```
 
-O `PYTHON_BIN` explícito garante que o ambiente virtual use o Python nativo
-do Homebrew, e não uma instalação x86_64 ou do miniconda/Anaconda que
-porventura já esteja ativa no seu shell.
+Instale as dependências:
 
-**Uso diário:**
 ```bash
-source .venv/bin/activate
-supertranscriptfc --source ./audio.mp3 --local
+/opt/homebrew/bin/brew install python@3.12 ffmpeg git
 ```
 
-A diarização (`pyannote.audio`) usa aceleração **MPS** automaticamente. A
-transcrição (`faster-whisper`) roda em **CPU**, pois seu motor (`ctranslate2`)
-não suporta MPS.
+### Windows
 
----
+Instale Python 3.12 e Git:
 
-## Windows (ex: ps20)
-
-**1. Python de verdade (não o alias da Microsoft Store):**
 ```powershell
 winget install Python.Python.3.12
-```
-Depois, em **Configurações → Aplicativos → Configurações avançadas do
-aplicativo → Aliases de execução do aplicativo**, desligue `python.exe` e
-`python3.exe`. Feche e reabra o terminal, e confirme com `python --version`.
-
-**2. Git:**
-```powershell
 winget install Git.Git
 ```
 
-**3. Clonar e instalar:**
+Confirme que `python` não é o alias da Microsoft Store:
+
 ```powershell
-git clone https://github.com/fabianocastello/supertranscriptfc.git C:\supertranscriptfc
-cd C:\supertranscriptfc
-scripts\install.bat
-```
-(`install.bat` funciona tanto no `cmd` quanto no PowerShell — é só um atalho
-que chama `install.ps1` contornando a política de execução padrão.)
-
-**Máquina antiga ou com PowerShell bloqueado por política?** Use
-`scripts\install-legacy.bat` no lugar do passo acima — faz a mesma coisa,
-mas em `cmd.exe` puro, sem chamar PowerShell em nenhum momento:
-```cmd
-scripts\install-legacy.bat
-```
-
-**Sem `git` instalado?** `curl.exe` e `tar.exe` já vêm embutidos no Windows
-10 (1803+) e 11 — dá pra baixar e atualizar o código sem instalar nada:
-```cmd
-curl -L -o supertranscriptfc.zip https://github.com/fabianocastello/supertranscriptfc/archive/refs/heads/main.zip
-tar -xf supertranscriptfc.zip
-cd supertranscriptfc-main
-scripts\install-legacy.bat
-```
-Depois, para atualizar (sem `git pull`), rode `scripts\update-nogit.bat` — ele
-baixa o ZIP mais recente, substitui os arquivos (preservando `.venv` e
-`.env`) e já roda o comando que você passar.
-
-**Uso diário:**
-```cmd
-.venv\Scripts\activate.bat
-```
-```powershell
-.venv\Scripts\Activate.ps1
-```
-```
-supertranscriptfc --source .\audio.mp3 --local
+python --version
+git --version
 ```
 
 ---
 
-## Configurar o `.env` (igual em todas as plataformas)
+## 2. Instalar o projeto
 
-O instalador cria um `.env` a partir do `.env.example`. Preencha:
-
-- **`DROPBOX_APP_KEY`, `DROPBOX_APP_SECRET`, `DROPBOX_REFRESH_TOKEN`** —
-  credenciais do seu App Dropbox. Para gerar o `DROPBOX_REFRESH_TOKEN` (sem
-  expiração), preencha primeiro `APP_KEY`/`APP_SECRET` e rode:
-  ```bash
-  python scripts/dropbox_oauth.py
-  ```
-  Ele abre uma URL de autorização, você aprova e cola o código de volta —
-  o script já grava o refresh token no `.env` sozinho.
-
-- **`HF_TOKEN`** — token do Hugging Face (fine-grained, preset **Read-Only**
-  já basta). Antes de usar, aceite os termos de uso, logado com a mesma
-  conta, em **todos** estes modelos (são gated):
-  - `huggingface.co/pyannote/speaker-diarization-3.1`
-  - `huggingface.co/pyannote/segmentation-3.0`
-  - `huggingface.co/pyannote/speaker-diarization-community-1`
-
-O mesmo `.env` (mesmas credenciais) deve ser copiado para todas as máquinas
-onde o projeto for instalado — é o mesmo App Dropbox e a mesma conta
-Hugging Face compartilhados entre elas.
-
-## Testando
+### Linux/macOS
 
 ```bash
-supertranscriptfc --source /caminho/audio_curto.mp3 --local --model-size small --language pt
+git clone https://github.com/fabianocastello/voxelfc.git ~/voxelfc
+cd ~/voxelfc
+./scripts/install.sh
+source .venv/bin/activate
 ```
 
-Comece com `--model-size small` para validar rápido que tudo está
-funcionando antes de usar `large-v3` (mais lento, principalmente sem GPU).
+No macOS Apple Silicon, se houver mais de um Python instalado:
+
+```bash
+PYTHON_BIN=/opt/homebrew/bin/python3.12 ./scripts/install.sh
+source .venv/bin/activate
+```
+
+### Windows
+
+```powershell
+git clone https://github.com/fabianocastello/voxelfc.git C:\voxelfc
+cd C:\voxelfc
+scripts\install.bat
+.venv\Scripts\Activate.ps1
+```
+
+---
+
+## 3. Configurar o `.env`
+
+O instalador cria `.env` a partir de `.env.example`. Preencha estes campos:
+
+```dotenv
+DROPBOX_APP_KEY=...
+DROPBOX_APP_SECRET=...
+DROPBOX_REFRESH_TOKEN=...
+HF_TOKEN=...
+```
+
+O `DROPBOX_REFRESH_TOKEN` é usado pelos comandos de auditoria e pelo pipeline.
+Para gerar ou renovar o token:
+
+```bash
+python scripts/dropbox_oauth.py
+```
+
+Mantenha o `.env` local, fora do Git, e não coloque credenciais em logs ou relatórios.
+
+---
+
+## 4. Processar um áudio
+
+Ative o ambiente virtual antes dos comandos:
+
+```bash
+# Linux/macOS
+source .venv/bin/activate
+
+# Windows PowerShell
+.venv\Scripts\Activate.ps1
+```
+
+Processar um arquivo local:
+
+```bash
+voxelfc --source /caminho/audio.mp3 --local
+```
+
+Processar um arquivo no Dropbox:
+
+```bash
+voxelfc --source /Gravacoes/reuniao.mp3
+```
+
+Teste inicial recomendado:
+
+```bash
+voxelfc \
+  --source /caminho/audio_curto.mp3 \
+  --local \
+  --model-size small \
+  --language pt
+```
+
+---
+
+## 5. Consultar locks no Dropbox
+
+O comando abaixo usa o `.env`, acessa a pasta remota e lista os locks com máquina,
+arquivo, início e tempo decorrido:
+
+```bash
+python ./tools/status.py /_AudioMemosFC/MamyCalls
+```
+
+No Windows PowerShell, use o mesmo comando:
+
+```powershell
+python .\tools\status.py /_AudioMemosFC/MamyCalls
+```
+
+A consulta é somente leitura no Dropbox. Ela lê os locks e, quando a duração não está no
+front matter do transcript, baixa temporariamente o áudio correspondente para medir a
+duração com `ffprobe`; o arquivo temporário local é removido ao fim. Nenhum arquivo no
+Dropbox é criado, alterado ou removido.
+
+Exemplo de outra pasta:
+
+```bash
+python ./tools/status.py /Outra/Pasta
+```
+
+O caminho da pasta Dropbox deve começar com `/`.
+
+---
+
+## 6. Remover locks antigos
+
+### Primeiro: simular
+
+Sempre confira os candidatos antes de remover:
+
+```bash
+python ./tools/remove_locks.py \
+  /_AudioMemosFC/MamyCalls \
+  --older_than 10m \
+  --dry-run
+```
+
+### Depois: remover
+
+Se confirmar que os locks não correspondem a processos ainda executando:
+
+```bash
+python ./tools/remove_locks.py \
+  /_AudioMemosFC/MamyCalls \
+  --older_than 10m
+```
+
+A comparação é estrita: só são removidos locks com idade **maior** que o limite.
+Locks sem data interpretável nunca são removidos automaticamente.
+
+### Formatos aceitos
+
+```text
+30s    30 segundos
+10m    10 minutos
+1h     1 hora
+2h     2 horas
+```
+
+### Formatos rejeitados
+
+```text
+10
+10 m
+1 hour
+1d
+```
+
+O argumento precisa ser um número inteiro positivo seguido imediatamente por `s`, `m`
+ou `h`:
+
+```text
+--older_than 30s
+--older_than 10m
+--older_than 1h
+```
+
+> Segurança: antes de apagar um lock, confirme na máquina indicada que não existe
+> uma execução real correspondente. Remover um lock ativo pode permitir que outro
+> processo inicie o mesmo áudio em paralelo.
+
+---
+
+## 7. Auditoria completa
+
+Para gerar o relatório completo — front matter, métricas de conversão, lista de
+transcripts e locks — use:
+
+```bash
+python ./tools/audit.py /_AudioMemosFC/MamyCalls
+```
+
+O relatório é salvo localmente em:
+
+```text
+tools/YYYY-MM-DD-HH-MM__AudioMemosFC_MamyCalls.md
+```
+
+Esse comando também é somente leitura em relação ao Dropbox. Durante a consulta, ele
+mostra o progresso na mesma linha — conexão, listagem, leitura dos transcripts, análise
+dos locks e medição dos áudios — para deixar claro que continua executando. Para medir
+a duração dos áudios associados aos locks, pode baixá-los temporariamente e usar
+`ffprobe`; os temporários locais são removidos ao fim. As métricas de conversão
+consideram somente áudios com pelo menos 1 minuto; os demais continuam listados, mas
+não entram nos cálculos.
+
+---
+
+## 8. Validar a instalação
+
+```bash
+python -m py_compile \
+  tools/dropbox_lock_utils.py \
+  tools/status.py \
+  tools/remove_locks.py \
+  tools/audit.py
+```
+
+Testar a ajuda sem acessar o Dropbox:
+
+```bash
+python ./tools/status.py --help
+python ./tools/remove_locks.py --help
+```
+
+Testar a validação de formato sem remover nada:
+
+```bash
+python ./tools/remove_locks.py \
+  /_AudioMemosFC/MamyCalls \
+  --older_than 10m \
+  --dry-run
+```

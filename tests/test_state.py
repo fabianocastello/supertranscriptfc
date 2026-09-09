@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from supertranscriptfc.state import JobState, ProcessedRegistry, compute_job_id
+from voxelfc.state import JobState, ProcessedRegistry, compute_job_id
 
 
 def test_compute_job_id_is_stable_and_deterministic():

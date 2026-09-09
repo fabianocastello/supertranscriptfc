@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from supertranscriptfc.merge import LabeledSegment
-from supertranscriptfc.outputs import format_front_matter, write_srt, write_txt, write_vtt
+from voxelfc.merge import LabeledSegment
+from voxelfc.outputs import format_front_matter, write_srt, write_txt, write_vtt
 
 
 def make_segments():
@@ -29,7 +29,7 @@ def test_write_txt_without_metadata_has_no_front_matter(tmp_path: Path):
 
 def test_write_txt_with_metadata_prepends_yaml_front_matter(tmp_path: Path):
     metadata = {
-        "system": "SuperTranscriptFC",
+        "system": "VOXEL FC",
         "audio_file": "audio.mp3",
         "processado": "2026-09-07",
         "running_on": "thor25",
@@ -40,7 +40,7 @@ def test_write_txt_with_metadata_prepends_yaml_front_matter(tmp_path: Path):
 
     lines = content.splitlines()
     assert lines[0] == "---"
-    assert lines[1] == 'system: "SuperTranscriptFC"'
+    assert lines[1] == 'system: "VOXEL FC"'
     assert 'audio_file: "audio.mp3"' in content
     assert 'running_on: "thor25"' in content
     assert "locutores_detectados: 2" in content
@@ -51,10 +51,10 @@ def test_write_txt_with_metadata_prepends_yaml_front_matter(tmp_path: Path):
 def test_format_front_matter_preserves_dict_insertion_order():
     # "system" deve vir primeiro porque quem monta o dict (pipeline.py) o
     # insere primeiro; format_front_matter so' preserva a ordem, nao reordena.
-    front_matter = format_front_matter({"system": "SuperTranscriptFC", "other": "x"})
+    front_matter = format_front_matter({"system": "VOXEL FC", "other": "x"})
     lines = front_matter.splitlines()
     assert lines[0] == "---"
-    assert lines[1] == 'system: "SuperTranscriptFC"'
+    assert lines[1] == 'system: "VOXEL FC"'
     assert lines[2] == 'other: "x"'
 
 

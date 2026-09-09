@@ -1,5 +1,5 @@
 @echo off
-REM Instalador do SuperTranscriptFC para Windows (ex: ps20).
+REM Instalador do VOXEL FC para Windows (ex: ps20).
 REM So' um wrapper fino que chama install.ps1 via PowerShell contornando a
 REM politica de execucao padrao (que costuma bloquear scripts .ps1), para
 REM quem preferir dar duplo-clique em vez de abrir o PowerShell manualmente.

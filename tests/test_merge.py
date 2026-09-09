@@ -1,6 +1,6 @@
-from supertranscriptfc.diarize import SpeakerTurn
-from supertranscriptfc.merge import UNKNOWN_SPEAKER_LABEL, assign_speakers
-from supertranscriptfc.transcribe import TranscriptSegment
+from voxelfc.diarize import SpeakerTurn
+from voxelfc.merge import UNKNOWN_SPEAKER_LABEL, assign_speakers
+from voxelfc.transcribe import TranscriptSegment
 
 
 def test_assign_speakers_maps_to_generic_labels_in_order_of_appearance():

@@ -1,7 +1,7 @@
 [project]
-name = "supertranscriptfc"
+name = "voxelfc"
 version = "0.1.0"
-description = "Baixa audio do Dropbox, transcreve, diariza por locutor e envia os resultados de volta."
+description = "VOXEL FC (File Companion): baixa audio, transcreve, diariza por locutor e envia os resultados de volta."
 requires-python = ">=3.10"
 dependencies = [
     "python-dotenv>=1.0.0",
@@ -24,7 +24,9 @@ all = [
 ]
 
 [project.scripts]
-supertranscriptfc = "supertranscriptfc.cli:main"
+voxelfc = "voxelfc.cli:main"
+# Deprecated compatibility alias; remove after all machines migrate.
+supertranscriptfc = "voxelfc.cli:main"
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]

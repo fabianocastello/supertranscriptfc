@@ -28,6 +28,22 @@ MLX_MODEL_REPOS = {
 }
 
 
+_MLX_MODEL_PATH_CACHE: dict[str, str] = {}
+
+
+def _resolve_mlx_model_path(model_repo: str) -> str:
+    """Resolves a HF repo id to its local cache directory once per process
+    and reuses it, instead of passing the repo id straight to
+    mlx_whisper.transcribe() on every call - which re-checks the Hub (a
+    'Fetching files'/'Download complete' round-trip, even when nothing new
+    needs downloading) on every single file in a batch."""
+    if model_repo not in _MLX_MODEL_PATH_CACHE:
+        from huggingface_hub import snapshot_download
+
+        _MLX_MODEL_PATH_CACHE[model_repo] = snapshot_download(repo_id=model_repo)
+    return _MLX_MODEL_PATH_CACHE[model_repo]
+
+
 def _is_apple_silicon() -> bool:
     return platform.system() == "Darwin" and platform.machine() == "arm64"
 
@@ -110,9 +126,10 @@ def _transcribe_with_mlx(
 
     model_repo = MLX_MODEL_REPOS.get(model_size, model_size)  # a full HF repo can be passed directly
     logger.info("Transcribing with mlx-whisper (model=%s, device=Apple GPU/Neural Engine)", model_repo)
+    model_path = _resolve_mlx_model_path(model_repo)
 
     detect_result = mlx_whisper.transcribe(
-        str(wav_path), path_or_hf_repo=model_repo, language=None, task="transcribe"
+        str(wav_path), path_or_hf_repo=model_path, language=None, task="transcribe"
     )
     detected_language = detect_result.get("language")
     # mlx_whisper doesn't expose a detection confidence the way
@@ -130,7 +147,7 @@ def _transcribe_with_mlx(
             detect_result
             if language == detected_language
             else mlx_whisper.transcribe(
-                str(wav_path), path_or_hf_repo=model_repo, language=language, task="transcribe"
+                str(wav_path), path_or_hf_repo=model_path, language=language, task="transcribe"
             )
         )
     elif detected_language in NON_LATIN_LANGUAGES:
@@ -140,7 +157,7 @@ def _transcribe_with_mlx(
             detected_language,
         )
         result = mlx_whisper.transcribe(
-            str(wav_path), path_or_hf_repo=model_repo, language=detected_language, task="translate"
+            str(wav_path), path_or_hf_repo=model_path, language=detected_language, task="translate"
         )
     else:
         logger.info("Detected language: %s", detected_language)

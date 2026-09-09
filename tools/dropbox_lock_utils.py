@@ -10,8 +10,28 @@ import tempfile
 from dotenv import dotenv_values
 
 AUDIO_EXTENSIONS = (".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".wma", ".mp4", ".mov")
-TRANSCRIPT_SUFFIX = ".transcriptFC.txt"
+TRANSCRIPT_SUFFIX = ".voxel.txt"
+# Older runs wrote the transcript as "<stem>.transcriptFC.txt"; recognized
+# here too so existing files are still found by these read-only tools.
+LEGACY_TRANSCRIPT_SUFFIX = ".transcriptFC.txt"
 LOCK_SUFFIX = ".transcriptFC.lock"
+
+
+def transcript_suffix_for(path: str) -> str | None:
+    """Returns whichever transcript suffix (current or legacy) `path` ends
+    with, or None if it doesn't end with either."""
+    if path.endswith(TRANSCRIPT_SUFFIX):
+        return TRANSCRIPT_SUFFIX
+    if path.endswith(LEGACY_TRANSCRIPT_SUFFIX):
+        return LEGACY_TRANSCRIPT_SUFFIX
+    return None
+
+
+def strip_transcript_suffix(path: str) -> str:
+    """Removes whichever transcript suffix `path` ends with (current or
+    legacy). Returns `path` unchanged if it ends with neither."""
+    suffix = transcript_suffix_for(path)
+    return path[: -len(suffix)] if suffix else path
 STALE_AFTER = timedelta(hours=36)
 VALID_AGE_RE = re.compile(r"^(?P<amount>[1-9]\d*)(?P<unit>[hms])$")
 DURATION_RE = re.compile(r"^(?:(?P<h>\d+)h)?(?:(?P<m>\d+)m)?(?:(?P<s>\d+)s)?$")
@@ -199,7 +219,12 @@ def collect_locks(
             except ValueError:
                 started_utc = None
         age = max(0.0, (now_utc - started_utc).total_seconds()) if started_utc else None
-        transcript_path = entry.path_display[: -len(LOCK_SUFFIX)] + TRANSCRIPT_SUFFIX
+        stem = entry.path_display[: -len(LOCK_SUFFIX)]
+        transcript_path = stem + TRANSCRIPT_SUFFIX
+        if transcript_path not in files_by_path:
+            legacy_path = stem + LEGACY_TRANSCRIPT_SUFFIX
+            if legacy_path in files_by_path:
+                transcript_path = legacy_path
         audio_duration = None
         if include_audio_duration:
             audio_duration = (
@@ -301,5 +326,5 @@ def md_cell(value: object) -> str:
 
 def summarize_entries(entries) -> tuple[int, int]:
     audio_count = sum(PurePosixPath(entry.name).suffix.lower() in AUDIO_EXTENSIONS for entry in entries)
-    transcript_count = sum(entry.name.endswith(TRANSCRIPT_SUFFIX) for entry in entries)
+    transcript_count = sum(transcript_suffix_for(entry.name) is not None for entry in entries)
     return audio_count, transcript_count

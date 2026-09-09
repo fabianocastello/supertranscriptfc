@@ -24,6 +24,14 @@ logger = logging.getLogger("voxelfc")
 # was shut down mid-job) and let another machine pick it up.
 LOCK_STALE_AFTER = timedelta(hours=36)
 
+TRANSCRIPT_SUFFIX = ".voxel.txt"
+VTT_SUFFIX = ".voxel.vtt"
+LOCK_SUFFIX = ".transcriptFC.lock"
+# Older runs wrote the transcript as "<stem>.transcriptFC.txt". Recognized
+# as "already done" so the ~250+ files already produced under that name
+# aren't reprocessed, but new runs only ever write TRANSCRIPT_SUFFIX.
+LEGACY_TRANSCRIPT_SUFFIX = ".transcriptFC.txt"
+
 
 def _make_lock_content() -> str:
     hostname = socket.gethostname()
@@ -40,29 +48,76 @@ def _is_lock_stale(lock_content: str) -> bool:
     return datetime.now() - locked_at > LOCK_STALE_AFTER
 
 
-def _local_target(source: Path, dest_dir: Path | None) -> tuple[str, Path, Path, Path]:
+def _trimmed_stem_name(name: str) -> str | None:
+    """If name has leading/trailing whitespace in its stem (e.g. the file is
+    literally named 'audio .mp3'), returns the trimmed name ('audio.mp3').
+    Returns None if there's nothing to trim. Only the stem is touched - the
+    extension is left exactly as it is."""
+    dot_index = name.rfind(".")
+    if dot_index <= 0:
+        return None
+    stem, ext = name[:dot_index], name[dot_index:]
+    trimmed = stem.strip()
+    if not trimmed or trimmed == stem:
+        return None
+    return f"{trimmed}{ext}"
+
+
+def _ensure_local_name_trimmed(path: Path) -> Path:
+    new_name = _trimmed_stem_name(path.name)
+    if new_name is None:
+        return path
+    new_path = path.with_name(new_name)
+    if new_path.exists():
+        logger.warning(
+            "Can't trim whitespace from '%s': '%s' already exists there.", path.name, new_name
+        )
+        return path
+    path.rename(new_path)
+    logger.info("Renamed '%s' -> '%s' (trimmed whitespace before the extension).", path.name, new_name)
+    return new_path
+
+
+def _ensure_dropbox_name_trimmed(dropbox_client, path: str) -> str:
+    purepath = PurePosixPath(path)
+    new_name = _trimmed_stem_name(purepath.name)
+    if new_name is None:
+        return path
+    new_path = str(purepath.with_name(new_name))
+    if dropbox_client.file_exists(new_path):
+        logger.warning("Can't trim whitespace from '%s': '%s' already exists there.", path, new_path)
+        return path
+    dropbox_client.move_file(path, new_path)
+    logger.info("Renamed '%s' -> '%s' (trimmed whitespace before the extension).", path, new_path)
+    return new_path
+
+
+def _local_target(source: Path, dest_dir: Path | None) -> tuple[str, Path, Path, Path, Path]:
     """For a local audio file, computes the output base name and the paths
-    where the transcript and lock (if any) would live at the destination."""
+    where the transcript (current and legacy names) and lock (if any) would
+    live at the destination."""
     source = source.resolve()
     resolved_dest_dir = (dest_dir or source.parent).resolve()
     stem = build_output_stem(source.stem, source.parent.name)
-    transcript_path = resolved_dest_dir / f"{stem}.transcriptFC.txt"
-    lock_path = resolved_dest_dir / f"{stem}.transcriptFC.lock"
-    return stem, resolved_dest_dir, transcript_path, lock_path
+    transcript_path = resolved_dest_dir / f"{stem}{TRANSCRIPT_SUFFIX}"
+    legacy_transcript_path = resolved_dest_dir / f"{stem}{LEGACY_TRANSCRIPT_SUFFIX}"
+    lock_path = resolved_dest_dir / f"{stem}{LOCK_SUFFIX}"
+    return stem, resolved_dest_dir, transcript_path, legacy_transcript_path, lock_path
 
 
-def _dropbox_target(source_path: str, dest_folder: str | None) -> tuple[str, str, str, str]:
+def _dropbox_target(source_path: str, dest_folder: str | None) -> tuple[str, str, str, str, str]:
     """For a Dropbox audio file, computes the output base name and the
-    remote paths where the transcript and lock (if any) would live at the
-    destination."""
+    remote paths where the transcript (current and legacy names) and lock
+    (if any) would live at the destination."""
     source_purepath = PurePosixPath(source_path)
     stem = build_output_stem(source_purepath.stem, source_purepath.parent.name)
     resolved_dest_folder = dest_folder or str(source_purepath.parent)
     if resolved_dest_folder != "/":
         resolved_dest_folder = resolved_dest_folder.rstrip("/")
-    transcript_path = f"{resolved_dest_folder}/{stem}.transcriptFC.txt"
-    lock_path = f"{resolved_dest_folder}/{stem}.transcriptFC.lock"
-    return stem, resolved_dest_folder, transcript_path, lock_path
+    transcript_path = f"{resolved_dest_folder}/{stem}{TRANSCRIPT_SUFFIX}"
+    legacy_transcript_path = f"{resolved_dest_folder}/{stem}{LEGACY_TRANSCRIPT_SUFFIX}"
+    lock_path = f"{resolved_dest_folder}/{stem}{LOCK_SUFFIX}"
+    return stem, resolved_dest_folder, transcript_path, legacy_transcript_path, lock_path
 
 
 def process_file(
@@ -128,7 +183,7 @@ def process_file(
 
     if not state.is_done("transcribed"):
         stage_start = time.monotonic()
-        segments, detected_language, detected_language_probability = transcribe_audio(
+        segments, detected_language, detected_language_probability, translated_to_english = transcribe_audio(
             wav_path,
             model_size=config.model_size,
             device=config.device,
@@ -142,6 +197,7 @@ def process_file(
             transcript=transcript_data,
             language=detected_language,
             language_probability=detected_language_probability,
+            translated_to_english=translated_to_english,
             transcribed_seconds=transcription_seconds,
         )
     else:
@@ -149,6 +205,7 @@ def process_file(
         transcript_data = state.data["transcript"]
         detected_language = state.data.get("language")
         detected_language_probability = state.data.get("language_probability")
+        translated_to_english = state.data.get("translated_to_english", False)
     transcription_seconds = state.data.get("transcribed_seconds", 0.0)
 
     if not state.is_done("diarized"):
@@ -195,6 +252,8 @@ def process_file(
         # translation into config.language rather than a faithful
         # transcription, so this must be explicit.
         metadata["force_language"] = config.language
+    if translated_to_english:
+        metadata["remarks"] = "non-latin languages converted to English"
     metadata.update(
         {
             "audio_duration": format_duration(audio_duration),
@@ -209,12 +268,12 @@ def process_file(
     output_paths: list[Path] = []
     if config.write_txt:
         output_paths.append(
-            write_txt(labeled_segments, output_dir / f"{output_stem}.transcriptFC.txt", metadata=metadata)
+            write_txt(labeled_segments, output_dir / f"{output_stem}{TRANSCRIPT_SUFFIX}", metadata=metadata)
         )
     if config.write_srt:
         output_paths.append(write_srt(labeled_segments, output_dir / f"{output_stem}.srt"))
     if config.write_vtt:
-        output_paths.append(write_vtt(labeled_segments, output_dir / f"{output_stem}.voxcelfc.vtt"))
+        output_paths.append(write_vtt(labeled_segments, output_dir / f"{output_stem}{VTT_SUFFIX}"))
 
     state.mark_done("outputs_written", outputs=[str(p) for p in output_paths])
     logger.info("[%s] Outputs generated: %s", job_id, [p.name for p in output_paths])
@@ -249,14 +308,17 @@ def run_local_job(
     folder - useful for "emptying out" a monitored folder over time. If
     archive_dir isn't given, the source file is never removed."""
     config.ensure_dirs()
-    output_stem, dest_dir, transcript_path, _lock_path = _local_target(source, dest_dir)
-    source = source.resolve()
+    source = _ensure_local_name_trimmed(source.resolve())
+    output_stem, dest_dir, transcript_path, legacy_transcript_path, _lock_path = _local_target(
+        source, dest_dir
+    )
     source_ref = f"local:{source}"
     job_id = compute_job_id(source_ref)
     registry = ProcessedRegistry(config.state_file)
 
-    if transcript_path.exists() and not config.force:
-        logger.info("Transcript already exists (%s), skipping: %s", transcript_path.name, source)
+    if not config.force and (transcript_path.exists() or legacy_transcript_path.exists()):
+        existing = transcript_path if transcript_path.exists() else legacy_transcript_path
+        logger.info("Transcript already exists (%s), skipping: %s", existing.name, source)
         return []
 
     work_dir = config.tmp_dir / job_id
@@ -279,7 +341,7 @@ def run_local_job(
         matching = [
             p
             for p in sorted(dest_dir.glob(f"{output_stem}.*"))
-            if p.resolve() != source and not p.name.endswith(".transcriptFC.lock")
+            if p.resolve() != source and not p.name.endswith(LOCK_SUFFIX)
         ]
         moved_paths = [_move_file_local(p, archive_dir) for p in matching]
         _move_file_local(source, archive_dir)
@@ -306,15 +368,19 @@ def run_dropbox_job(
     original audio AND the freshly uploaded outputs are moved (not copied)
     into that folder on Dropbox itself."""
     config.ensure_dirs()
+    source_path = _ensure_dropbox_name_trimmed(dropbox_client, source_path)
     source_ref = f"dropbox:{source_path}"
     job_id = compute_job_id(source_ref)
     registry = ProcessedRegistry(config.state_file)
 
-    stem, dest_folder, transcript_remote_path, lock_remote_path = _dropbox_target(
-        source_path, dest_folder
+    stem, dest_folder, transcript_remote_path, legacy_transcript_remote_path, lock_remote_path = (
+        _dropbox_target(source_path, dest_folder)
     )
 
-    if not config.force and dropbox_client.file_exists(transcript_remote_path):
+    if not config.force and (
+        dropbox_client.file_exists(transcript_remote_path)
+        or dropbox_client.file_exists(legacy_transcript_remote_path)
+    ):
         logger.info("Transcript already exists (%s), skipping: %s", transcript_remote_path, source_path)
         return []
 
@@ -442,14 +508,14 @@ def run_local_batch(
     next file even if one fails; returns a summary of files processed,
     skipped (already done), and failed."""
     source_dir = source_dir.resolve()
-    files = _iter_local_audio_files(source_dir, recursive)
+    files = [_ensure_local_name_trimmed(p) for p in _iter_local_audio_files(source_dir, recursive)]
 
     to_work_on: list[Path] = []
     n_transcript = 0
     n_lock = 0
     for audio_path in files:
-        _, _, transcript_path, lock_path = _local_target(audio_path, dest_dir)
-        has_transcript = transcript_path.exists()
+        _, _, transcript_path, legacy_transcript_path, lock_path = _local_target(audio_path, dest_dir)
+        has_transcript = transcript_path.exists() or legacy_transcript_path.exists()
         has_lock = lock_path.exists()
         n_transcript += has_transcript
         n_lock += has_lock
@@ -497,14 +563,19 @@ def run_dropbox_batch(
     """Processes every audio file in a Dropbox folder. Continues to the
     next file even if one fails; returns a summary of files processed,
     skipped (already done), and failed."""
-    files = dropbox_client.list_audio_files(source_folder, recursive=recursive)
+    files = [
+        _ensure_dropbox_name_trimmed(dropbox_client, p)
+        for p in dropbox_client.list_audio_files(source_folder, recursive=recursive)
+    ]
 
     to_work_on: list[str] = []
     n_transcript = 0
     n_lock = 0
     for audio_path in files:
-        _, _, transcript_path, lock_path = _dropbox_target(audio_path, dest_folder)
-        has_transcript = dropbox_client.file_exists(transcript_path)
+        _, _, transcript_path, legacy_transcript_path, lock_path = _dropbox_target(audio_path, dest_folder)
+        has_transcript = dropbox_client.file_exists(transcript_path) or dropbox_client.file_exists(
+            legacy_transcript_path
+        )
         has_lock = False
         if not has_transcript:
             lock_content = dropbox_client.read_text_file(lock_path)

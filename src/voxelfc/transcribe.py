@@ -10,6 +10,18 @@ from .progress import ProgressPrinter
 
 logger = logging.getLogger("voxelfc")
 
+# Whisper language codes that use a non-Latin script. When auto-detected
+# (i.e. --language wasn't forced), these are translated straight to English
+# instead of transcribed in the original script - see transcribe_audio().
+NON_LATIN_LANGUAGES = frozenset(
+    {
+        "zh", "ja", "ko", "ar", "ru", "uk", "el", "he", "hi", "th", "bn", "fa", "ur",
+        "hy", "ka", "am", "si", "km", "lo", "my", "bo", "gu", "pa", "ta", "te", "kn",
+        "ml", "mr", "ne", "sa", "yi", "mk", "bg", "sr", "kk", "mn", "tg", "tt", "ba",
+        "ps", "as",
+    }
+)
+
 
 def _ensure_cuda_libs_on_path() -> None:
     """ctranslate2 (faster-whisper's backend) dlopens libcublas/libcudnn at
@@ -70,17 +82,25 @@ def transcribe_audio(
     device: str = "auto",
     compute_type: str = "auto",
     language: str | None = None,
-) -> tuple[list[TranscriptSegment], str, float | None]:
+) -> tuple[list[TranscriptSegment], str, float | None, bool]:
     """Transcribes a WAV file with faster-whisper. faster_whisper is imported
     here rather than at module level so importing this module doesn't
     require the heavy dependency just to be loaded.
 
-    Returns (segments, detected_language, detected_language_probability).
+    Returns (segments, detected_language, detected_language_probability,
+    translated_to_english).
+
     The detected language/probability always reflect the actual spoken
     language identified by the model - even when `language` forces a
     specific transcription language, since in that case faster-whisper
     skips detection entirely and hardcodes language_probability=1, which
-    would be misleading to report as a real confidence value."""
+    would be misleading to report as a real confidence value.
+
+    When `language` is not forced and the detected language uses a
+    non-Latin script (NON_LATIN_LANGUAGES), the audio is translated straight
+    to English (Whisper's built-in translate task) instead of transcribed in
+    the original script; translated_to_english reports whether this
+    happened."""
     _ensure_cuda_libs_on_path()
     from faster_whisper import WhisperModel
 
@@ -93,35 +113,52 @@ def transcribe_audio(
     )
 
     model = WhisperModel(model_size, device=resolved_device, compute_type=resolved_compute_type)
-    segments_iter, info = model.transcribe(
-        str(wav_path),
-        language=language,
-        vad_filter=True,
-    )
 
+    # Always run a cheap detection-only pass first: its segments are never
+    # iterated, so this only pays for language identification, not a full
+    # transcription. Needed both to report an honest language_probability
+    # when a language is forced (see docstring) and, in auto mode, to decide
+    # the task (transcribe vs translate) before the real call starts - a
+    # single generation call can't switch task partway through.
+    _, detect_info = model.transcribe(str(wav_path), language=None, vad_filter=True)
+    detected_language = detect_info.language
+    detected_language_probability = getattr(detect_info, "language_probability", None)
+
+    translated_to_english = False
     if language is not None:
-        # Language was forced: info.language/language_probability are not a
-        # real detection (probability is hardcoded to 1). Run a separate,
-        # cheap detection-only pass to find the actual spoken language for
-        # reporting purposes; its segments are never iterated, so this only
-        # pays for language identification, not a second full transcription.
-        _, detect_info = model.transcribe(str(wav_path), language=None, vad_filter=True)
-        detected_language = detect_info.language
-        detected_language_probability = getattr(detect_info, "language_probability", None)
+        transcribe_language = language
+        task = "transcribe"
         logger.info(
             "Forced language for transcription: %s (actual detected language: %s, probability %.2f)",
             language,
             detected_language,
             detected_language_probability or 0.0,
         )
+    elif detected_language in NON_LATIN_LANGUAGES:
+        transcribe_language = detected_language
+        task = "translate"
+        translated_to_english = True
+        logger.info(
+            "Detected language %s uses a non-Latin script (probability %.2f); "
+            "translating to English instead of transcribing.",
+            detected_language,
+            detected_language_probability or 0.0,
+        )
     else:
-        detected_language = info.language
-        detected_language_probability = getattr(info, "language_probability", None)
+        transcribe_language = detected_language
+        task = "transcribe"
         logger.info(
             "Detected language: %s (probability %.2f)",
             detected_language,
             detected_language_probability or 0.0,
         )
+
+    segments_iter, info = model.transcribe(
+        str(wav_path),
+        language=transcribe_language,
+        task=task,
+        vad_filter=True,
+    )
 
     total_duration = getattr(info, "duration", None) or 0.0
     progress = ProgressPrinter("Transcribing", total_duration)
@@ -132,4 +169,4 @@ def transcribe_audio(
     progress.finish()
 
     logger.info("Transcription complete: %d segments", len(segments))
-    return segments, detected_language, detected_language_probability
+    return segments, detected_language, detected_language_probability, translated_to_english

@@ -47,7 +47,7 @@ def main() -> int:
     print(f"Dropbox folder: {args.root}")
     print(f"Query performed at: {now.isoformat(timespec='seconds')}")
     print(f"Audio files found: {audio_count}")
-    print(f"Transcripts .transcriptFC.txt: {transcript_count}")
+    print(f"Transcripts (.voxel.txt + legacy .transcriptFC.txt): {transcript_count}")
     print(f"Locks found: {len(locks)}")
     print("\nLocks and current runs")
 

@@ -22,10 +22,13 @@ from pathlib import Path, PurePosixPath
 
 from dotenv import dotenv_values
 
-from dropbox_lock_utils import probe_remote_audio_duration
+from dropbox_lock_utils import (
+    probe_remote_audio_duration,
+    strip_transcript_suffix,
+    transcript_suffix_for,
+)
 
 AUDIO_EXTENSIONS = (".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".wma", ".mp4", ".mov")
-TRANSCRIPT_SUFFIX = ".transcriptFC.txt"
 LOCK_SUFFIX = ".transcriptFC.lock"
 MIN_AUDIO_FOR_METRICS_SECONDS = 60
 
@@ -185,7 +188,7 @@ def audit(root: str, env_path: Path) -> dict:
     audio_paths = sorted(
         path for path, entry in files.items() if PurePosixPath(entry.name).suffix.lower() in AUDIO_EXTENSIONS
     )
-    transcript_paths = sorted(path for path in files if path.endswith(TRANSCRIPT_SUFFIX))
+    transcript_paths = sorted(path for path in files if transcript_suffix_for(path))
     lock_paths = sorted(path for path in files if path.endswith(LOCK_SUFFIX))
     progress(
         f"Dropbox listed: {len(audio_paths)} audio files, {len(transcript_paths)} transcripts, and {len(lock_paths)} locks"
@@ -196,7 +199,7 @@ def audit(root: str, env_path: Path) -> dict:
         progress(f"reading transcript {index}/{len(transcript_paths)}")
         text = read_remote_text(dbx, path)
         has_front_matter, fields = parse_front_matter(text)
-        stem = path[: -len(TRANSCRIPT_SUFFIX)]
+        stem = strip_transcript_suffix(path)
         audio_path = next((f"{stem}{ext}" for ext in AUDIO_EXTENSIONS if f"{stem}{ext}" in files), None)
         # NOTE: "audio_duration"/"conversion_time" match the front-matter field
         # names in use when this tool was updated. If the pipeline's
@@ -220,7 +223,7 @@ def audit(root: str, env_path: Path) -> dict:
         )
 
     transcript_by_stem = {
-        item["path"][: -len(TRANSCRIPT_SUFFIX)]: item for item in transcripts
+        strip_transcript_suffix(item["path"]): item for item in transcripts
     }
     locks = []
     for index, path in enumerate(lock_paths, start=1):
@@ -353,7 +356,7 @@ def make_report(data: dict) -> str:
         f"- **Dropbox folder:** `{data['root']}`",
         f"- **Query performed at:** `{data['generated_at']}`",
         f"- **Audio files found:** {data['audio_count']}",
-        f"- **`.transcriptFC.txt` transcripts:** {data['transcript_count']}",
+        f"- **Transcripts (`.voxel.txt` + legacy `.transcriptFC.txt`):** {data['transcript_count']}",
         f"- **Locks found:** {data['lock_count']}",
         "",
         "## Locks and current runs",

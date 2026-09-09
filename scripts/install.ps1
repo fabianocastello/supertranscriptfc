@@ -40,11 +40,11 @@ if ($hasNvidia) {
     $Extras = "$Extras,cuda"
 } else {
     Write-Host "No NVIDIA GPU detected (e.g. ps20): installing CPU-only torch/torchaudio (smaller download)."
-    pip install -q --index-url https://download.pytorch.org/whl/cpu torch torchaudio
+    python -m pip install -q --index-url https://download.pytorch.org/whl/cpu torch torchaudio
 }
 
 Write-Host "Installing the package (extras: $Extras) ..."
-pip install -q -e ".[$Extras]"
+python -m pip install -q -e ".[$Extras]"
 
 # --- 5. Create .env from the example, if needed ---
 if (-not (Test-Path ".env")) {

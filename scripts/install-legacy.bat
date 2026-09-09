@@ -42,12 +42,12 @@ set "EXTRAS=dropbox,transcribe,diarize"
 where nvidia-smi >nul 2>&1
 if errorlevel 1 (
     echo No NVIDIA GPU detected: installing CPU-only torch/torchaudio.
-    pip install -q --index-url https://download.pytorch.org/whl/cpu torch torchaudio
+    python -m pip install -q --index-url https://download.pytorch.org/whl/cpu torch torchaudio
 ) else (
     nvidia-smi >nul 2>&1
     if errorlevel 1 (
         echo No NVIDIA GPU detected: installing CPU-only torch/torchaudio.
-        pip install -q --index-url https://download.pytorch.org/whl/cpu torch torchaudio
+        python -m pip install -q --index-url https://download.pytorch.org/whl/cpu torch torchaudio
     ) else (
         echo NVIDIA GPU detected: installing with CUDA support.
         set "EXTRAS=%EXTRAS%,cuda"
@@ -55,7 +55,7 @@ if errorlevel 1 (
 )
 
 echo Installing the package (extras: %EXTRAS%) ...
-pip install -q -e ".[%EXTRAS%]"
+python -m pip install -q -e ".[%EXTRAS%]"
 if errorlevel 1 goto :fail
 
 REM --- 5. Create .env from the example, if needed ---

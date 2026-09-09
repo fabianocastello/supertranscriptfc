@@ -36,7 +36,7 @@ if [ ! -d ".venv" ]; then
 fi
 # shellcheck disable=SC1091
 source .venv/bin/activate
-pip install --upgrade pip -q
+python -m pip install --upgrade pip -q
 
 # --- 4. Detect NVIDIA GPU (CUDA) ---
 # Only relevant on Linux/Windows: on macOS, torch from PyPI already ships
@@ -53,11 +53,11 @@ else
     # torchaudio (a pyannote.audio dependency) also needs to come from the CPU
     # variant: the default PyPI wheel loads a native extension linked against
     # libcudart, which fails to import on machines without CUDA installed.
-    pip install -q --index-url https://download.pytorch.org/whl/cpu torch torchaudio || true
+    python -m pip install -q --index-url https://download.pytorch.org/whl/cpu torch torchaudio || true
 fi
 
 echo "Installing the package (extras: ${EXTRAS}) ..."
-pip install -q -e ".[${EXTRAS}]"
+python -m pip install -q -e ".[${EXTRAS}]"
 
 # --- 5. Create .env from the example, if needed ---
 if [ ! -f ".env" ]; then

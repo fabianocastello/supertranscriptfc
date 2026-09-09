@@ -70,15 +70,23 @@ def transcribe_audio(
     device: str = "auto",
     compute_type: str = "auto",
     language: str | None = None,
-) -> tuple[list[TranscriptSegment], str]:
-    """Transcreve um WAV usando faster-whisper. Import de faster_whisper e' feito
-    aqui dentro para nao exigir a dependencia pesada so' para importar o pacote."""
+) -> tuple[list[TranscriptSegment], str, float | None]:
+    """Transcribes a WAV file with faster-whisper. faster_whisper is imported
+    here rather than at module level so importing this module doesn't
+    require the heavy dependency just to be loaded.
+
+    Returns (segments, detected_language, detected_language_probability).
+    The detected language/probability always reflect the actual spoken
+    language identified by the model - even when `language` forces a
+    specific transcription language, since in that case faster-whisper
+    skips detection entirely and hardcodes language_probability=1, which
+    would be misleading to report as a real confidence value."""
     _ensure_cuda_libs_on_path()
     from faster_whisper import WhisperModel
 
     resolved_device, resolved_compute_type = _pick_device_and_compute_type(device, compute_type)
     logger.info(
-        "Transcrevendo com faster-whisper (model=%s, device=%s, compute_type=%s)",
+        "Transcribing with faster-whisper (model=%s, device=%s, compute_type=%s)",
         model_size,
         resolved_device,
         resolved_compute_type,
@@ -90,19 +98,38 @@ def transcribe_audio(
         language=language,
         vad_filter=True,
     )
-    logger.info(
-        "Idioma detectado: %s (probabilidade %.2f)",
-        info.language,
-        getattr(info, "language_probability", 0.0),
-    )
+
+    if language is not None:
+        # Language was forced: info.language/language_probability are not a
+        # real detection (probability is hardcoded to 1). Run a separate,
+        # cheap detection-only pass to find the actual spoken language for
+        # reporting purposes; its segments are never iterated, so this only
+        # pays for language identification, not a second full transcription.
+        _, detect_info = model.transcribe(str(wav_path), language=None, vad_filter=True)
+        detected_language = detect_info.language
+        detected_language_probability = getattr(detect_info, "language_probability", None)
+        logger.info(
+            "Forced language for transcription: %s (actual detected language: %s, probability %.2f)",
+            language,
+            detected_language,
+            detected_language_probability or 0.0,
+        )
+    else:
+        detected_language = info.language
+        detected_language_probability = getattr(info, "language_probability", None)
+        logger.info(
+            "Detected language: %s (probability %.2f)",
+            detected_language,
+            detected_language_probability or 0.0,
+        )
 
     total_duration = getattr(info, "duration", None) or 0.0
-    progress = ProgressPrinter("Transcrevendo", total_duration)
+    progress = ProgressPrinter("Transcribing", total_duration)
     segments = []
     for seg in segments_iter:
         segments.append(TranscriptSegment(start=seg.start, end=seg.end, text=seg.text.strip()))
         progress.update(seg.end)
     progress.finish()
 
-    logger.info("Transcricao concluida: %d segmentos", len(segments))
-    return segments, info.language
+    logger.info("Transcription complete: %d segments", len(segments))
+    return segments, detected_language, detected_language_probability

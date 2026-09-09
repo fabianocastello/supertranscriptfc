@@ -22,10 +22,14 @@ def _format_vtt_timestamp(seconds: float) -> str:
 
 
 def _format_yaml_value(value) -> str:
+    if value is None:
+        return "null"
     if isinstance(value, bool):
         return "true" if value else "false"
     if isinstance(value, int):
         return str(value)
+    if isinstance(value, float):
+        return repr(value)
     text = str(value).replace("\\", "\\\\").replace('"', '\\"')
     return f'"{text}"'
 

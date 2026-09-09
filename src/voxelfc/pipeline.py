@@ -127,7 +127,7 @@ def process_file(
 
     if not state.is_done("transcribed"):
         stage_start = time.monotonic()
-        segments, detected_language = transcribe_audio(
+        segments, detected_language, detected_language_probability = transcribe_audio(
             wav_path,
             model_size=config.model_size,
             device=config.device,
@@ -140,12 +140,14 @@ def process_file(
             "transcribed",
             transcript=transcript_data,
             language=detected_language,
+            language_probability=detected_language_probability,
             transcribed_seconds=transcription_seconds,
         )
     else:
         logger.info("[%s] Transcricao ja concluida, pulando.", job_id)
         transcript_data = state.data["transcript"]
         detected_language = state.data.get("language")
+        detected_language_probability = state.data.get("language_probability")
     transcription_seconds = state.data.get("transcribed_seconds", 0.0)
 
     if not state.is_done("diarized"):
@@ -175,17 +177,33 @@ def process_file(
     metadata = {
         "system": "VOXEL FC",
         "audio_file": input_path.name,
-        "processado": datetime.now().strftime("%Y-%m-%d"),
+        "processed_date": datetime.now().strftime("%Y-%m-%d"),
         "running_on": socket.gethostname(),
-        "modelo": config.model_size,
-        "idioma": detected_language or config.language or "auto",
-        "duracao_audio": format_duration(audio_duration),
-        "locutores_detectados": len({s.speaker for s in labeled_segments}),
-        "tempo_conversao": format_duration(conversion_seconds),
-        "tempo_transcricao": format_duration(transcription_seconds),
-        "tempo_diarizacao": format_duration(diarization_seconds),
-        "tempo_total": format_duration(total_seconds),
+        "model": config.model_size,
+        "language_detected": detected_language or "unknown",
+        "language_probability": (
+            round(detected_language_probability, 2)
+            if detected_language_probability is not None
+            else None
+        ),
     }
+    if config.language:
+        # Transcription was forced into this language rather than using the
+        # naturally detected one (language_detected above still reflects
+        # what was actually spoken) - the output may effectively be a
+        # translation into config.language rather than a faithful
+        # transcription, so this must be explicit.
+        metadata["force_language"] = config.language
+    metadata.update(
+        {
+            "audio_duration": format_duration(audio_duration),
+            "speakers_detected": len({s.speaker for s in labeled_segments}),
+            "conversion_time": format_duration(conversion_seconds),
+            "transcription_time": format_duration(transcription_seconds),
+            "diarization_time": format_duration(diarization_seconds),
+            "total_time": format_duration(total_seconds),
+        }
+    )
 
     output_paths: list[Path] = []
     if config.write_txt:

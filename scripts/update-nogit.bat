@@ -1,11 +1,11 @@
 @echo off
-REM Atualiza o codigo sem precisar do git instalado: baixa o ZIP do branch
-REM main direto do GitHub usando curl.exe e tar.exe (ambos ja vem embutidos
-REM no Windows 10 1803+ / Windows 11), extrai e substitui os arquivos do
-REM projeto, preservando .venv e .env. Depois roda o voxelfc com
-REM os argumentos passados.
+REM Updates the code without needing git installed: downloads the main
+REM branch ZIP directly from GitHub using curl.exe and tar.exe (both
+REM bundled with Windows 10 1803+ / Windows 11), extracts it, and replaces
+REM the project files, preserving .venv and .env. Then runs voxelfc with
+REM the given arguments.
 REM
-REM Uso: scripts\update-nogit.bat --source C:\caminho\audio.mp3 --local --model-size large-v3
+REM Usage: scripts\update-nogit.bat --source C:\path\to\audio.mp3 --local --model-size large-v3
 setlocal
 
 set "REPO_DIR=%~dp0.."
@@ -13,14 +13,14 @@ cd /d "%REPO_DIR%"
 
 where curl >nul 2>&1
 if errorlevel 1 (
-    echo curl.exe nao encontrado. Ele vem embutido no Windows 10 1803+/11;
-    echo em versoes mais antigas, instale o Git for Windows e use update.bat.
+    echo curl.exe not found. It's bundled with Windows 10 1803+/11;
+    echo on older versions, install Git for Windows and use update.bat.
     goto :fail
 )
 where tar >nul 2>&1
 if errorlevel 1 (
-    echo tar.exe nao encontrado. Ele vem embutido no Windows 10 1803+/11;
-    echo em versoes mais antigas, instale o Git for Windows e use update.bat.
+    echo tar.exe not found. It's bundled with Windows 10 1803+/11;
+    echo on older versions, install Git for Windows and use update.bat.
     goto :fail
 )
 
@@ -28,7 +28,7 @@ set "ZIP_URL=https://github.com/fabianocastello/voxelfc/archive/refs/heads/main.
 set "TMP_ZIP=%TEMP%\voxelfc_update.zip"
 set "TMP_EXTRACT=%TEMP%\voxelfc_update_extract"
 
-echo == Baixando codigo mais recente ==
+echo == Downloading the latest code ==
 curl -L -o "%TMP_ZIP%" "%ZIP_URL%"
 if errorlevel 1 goto :fail
 
@@ -37,12 +37,12 @@ mkdir "%TMP_EXTRACT%"
 tar -xf "%TMP_ZIP%" -C "%TMP_EXTRACT%"
 if errorlevel 1 goto :fail
 
-REM O zip do GitHub extrai para uma subpasta tipo voxelfc-main
+REM GitHub's zip extracts into a subfolder like voxelfc-main
 set "EXTRACTED_DIR="
 for /d %%D in ("%TMP_EXTRACT%\*") do set "EXTRACTED_DIR=%%D"
 if not defined EXTRACTED_DIR goto :fail
 
-echo == Atualizando arquivos (preservando .venv e .env) ==
+echo == Updating files (preserving .venv and .env) ==
 xcopy "%EXTRACTED_DIR%\src" "%REPO_DIR%\src" /e /y /i >nul
 xcopy "%EXTRACTED_DIR%\scripts" "%REPO_DIR%\scripts" /e /y /i >nul
 xcopy "%EXTRACTED_DIR%\tests" "%REPO_DIR%\tests" /e /y /i >nul
@@ -57,16 +57,16 @@ rmdir /s /q "%TMP_EXTRACT%"
 
 if exist ".venv\Scripts\activate.bat" (
     call ".venv\Scripts\activate.bat"
-    echo == Reinstalando dependencias e entry points atualizados ==
+    echo == Reinstalling dependencies and updated entry points ==
     python -m pip install -q -e ".[dropbox,transcribe,diarize]" >nul 2>&1
     if errorlevel 1 goto :fail
 )
 
-echo == Rodando: voxelfc %* ==
+echo == Running: voxelfc %* ==
 voxelfc %*
 exit /b %ERRORLEVEL%
 
 :fail
 echo.
-echo Falha ao atualizar o codigo. Veja as mensagens acima.
+echo Failed to update the code. See the messages above.
 exit /b 1

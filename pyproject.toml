@@ -1,7 +1,7 @@
 [project]
 name = "voxelfc"
 version = "0.1.0"
-description = "VOXEL FC (File Companion): baixa audio, transcreve, diariza por locutor e envia os resultados de volta."
+description = "VOXEL FC (File Companion): downloads audio, transcribes it, diarizes speakers, and uploads the results back."
 requires-python = ">=3.10"
 dependencies = [
     "python-dotenv>=1.0.0",
@@ -11,10 +11,11 @@ dependencies = [
 dropbox = ["dropbox>=11.36.0"]
 transcribe = ["faster-whisper>=1.0.0"]
 diarize = ["pyannote.audio>=3.1.0", "torch>=2.1.0"]
-# So' necessario em maquinas Linux/Windows com GPU NVIDIA: fornece libcublas.so.12
-# e libcudnn, que o ctranslate2 (motor do faster-whisper) carrega em runtime e
-# nao vem embutido no wheel do torch. install.sh/install.ps1 adicionam este
-# extra automaticamente quando detectam uma GPU NVIDIA.
+# Only needed on Linux/Windows machines with an NVIDIA GPU: provides
+# libcublas.so.12 and libcudnn, which ctranslate2 (faster-whisper's backend)
+# loads at runtime and which don't come bundled with the torch wheel.
+# install.sh/install.ps1 add this extra automatically when they detect an
+# NVIDIA GPU.
 cuda = ["nvidia-cublas-cu12", "nvidia-cudnn-cu12==9.*"]
 all = [
     "dropbox>=11.36.0",

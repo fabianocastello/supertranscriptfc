@@ -1,11 +1,11 @@
-# Uma pasta do Dropbox por linha (sempre comecando com "/"). Linhas em
-# branco ou comecando com "#" sao ignoradas.
+# One Dropbox folder per line (always starting with "/"). Blank lines or
+# lines starting with "#" are ignored.
 #
-# Copie este arquivo para scripts/folders.txt (sem o .example) e edite com
-# as pastas reais que voce quer monitorar. scripts/folders.txt nao vai para
-# o git (esta no .gitignore), entao fica so' nesta maquina.
+# Copy this file to scripts/folders.txt (without the .example) and edit it
+# with the actual folders you want to monitor. scripts/folders.txt is not
+# checked into git (it's in .gitignore), so it stays local to this machine.
 #
-# Exemplos:
+# Examples:
 # /_PodcastsFC/Xadrez Verbal
 # /_PodcastsFC/Lex Fridman Podcast
 # /_AudioMemosFC/MamyCalls

@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Remove locks antigos de uma pasta Dropbox.
+"""Removes stale locks from a Dropbox folder.
 
-Uso:
+Usage:
     python ./tools/remove_locks.py /_AudioMemosFC/MamyCalls --older_than 10m
     python ./tools/remove_locks.py /_AudioMemosFC/MamyCalls --older_than 1h --dry-run
 
-O limite é estrito: um lock é removido somente quando está há MAIS tempo que
- o limite informado. São aceitos somente valores como 1h, 10m ou 30s, sem
- espaço entre número e unidade. Locks sem data interpretável nunca são removidos.
+The threshold is strict: a lock is only removed when it has been around for
+MORE time than the given threshold. Only values like 1h, 10m, or 30s are
+accepted, with no space between the number and the unit. Locks without a
+parseable date are never removed.
 """
 from __future__ import annotations
 
@@ -31,12 +32,12 @@ from dropbox_lock_utils import (  # noqa: E402
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("root", help="Caminho absoluto da pasta no Dropbox")
-    parser.add_argument("--older_than", required=True, help="Idade mínima: 1h, 10m ou 30s")
+    parser.add_argument("root", help="Absolute path of the Dropbox folder")
+    parser.add_argument("--older_than", required=True, help="Minimum age: 1h, 10m, or 30s")
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Lista o que seria removido sem apagar locks",
+        help="List what would be removed without deleting any locks",
     )
     args = parser.parse_args()
 
@@ -51,7 +52,7 @@ def main() -> int:
         entries = list_files(dbx, args.root)
         locks = collect_locks(dbx, args.root, entries, now=now)
     except Exception as exc:
-        print(f"Erro ao consultar o Dropbox: {exc}", file=sys.stderr)
+        print(f"Error querying Dropbox: {exc}", file=sys.stderr)
         return 1
 
     candidates = [
@@ -60,23 +61,23 @@ def main() -> int:
         if lock.age_seconds is not None and lock.age_seconds > threshold_seconds
     ]
     unknown = [lock for lock in locks if lock.age_seconds is None]
-    prefix = "SIMULAÇÃO — " if args.dry_run else ""
-    print(f"{prefix}Pasta Dropbox: {args.root}")
-    print(f"Consulta realizada em: {now.isoformat(timespec='seconds')}")
-    print(f"Critério: locks com mais de {format_age_limit(threshold_seconds)}")
-    print(f"Locks encontrados: {len(locks)}")
-    print(f"Locks candidatos: {len(candidates)}")
+    prefix = "DRY RUN — " if args.dry_run else ""
+    print(f"{prefix}Dropbox folder: {args.root}")
+    print(f"Query performed at: {now.isoformat(timespec='seconds')}")
+    print(f"Criterion: locks older than {format_age_limit(threshold_seconds)}")
+    print(f"Locks found: {len(locks)}")
+    print(f"Candidate locks: {len(candidates)}")
 
     if candidates:
-        print("\nLocks selecionados:")
+        print("\nSelected locks:")
         for lock in candidates:
             print(f"- {lock.machine} | {lock.name} | {format_elapsed(lock.age_seconds)}")
     else:
-        print("\nNenhum lock atende ao critério.")
+        print("\nNo lock matches the criterion.")
 
     if unknown:
         print(
-            f"\nNão removidos por segurança ({len(unknown)} sem data interpretável): "
+            f"\nNot removed for safety ({len(unknown)} without a parseable date): "
             + ", ".join(lock.name for lock in unknown)
         )
 
@@ -92,12 +93,12 @@ def main() -> int:
         except Exception as exc:
             failures.append((lock, str(exc)))
 
-    print(f"\nLocks removidos: {len(removed)}")
+    print(f"\nLocks removed: {len(removed)}")
     if removed:
         distribution = Counter(lock.machine for lock in removed)
-        print("Removidos por máquina: " + ", ".join(f"{machine} ({count})" for machine, count in sorted(distribution.items())))
+        print("Removed by machine: " + ", ".join(f"{machine} ({count})" for machine, count in sorted(distribution.items())))
     if failures:
-        print(f"Falhas ao remover: {len(failures)}", file=sys.stderr)
+        print(f"Failures while removing: {len(failures)}", file=sys.stderr)
         for lock, error in failures:
             print(f"- {lock.name}: {error}", file=sys.stderr)
         return 1

@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Gera um DROPBOX_REFRESH_TOKEN de longa duracao (sem expiracao) via fluxo
-OAuth2 do Dropbox, e atualiza o .env do projeto automaticamente.
+"""Generates a long-lived DROPBOX_REFRESH_TOKEN (no expiration) via the
+Dropbox OAuth2 flow, and updates the project's .env automatically.
 
-Diferente do botao "Generate access token" do App Console (que da' um token
-valido por poucas horas), este fluxo produz um refresh token: o SDK do
-Dropbox usa ele junto com o app key/secret para renovar o access token
-sozinho a cada chamada, entao o VOXEL FC pode rodar sem supervisao
-por horas/dias.
+Unlike the App Console's "Generate access token" button (which gives a
+token valid for only a few hours), this flow produces a refresh token: the
+Dropbox SDK uses it together with the app key/secret to renew the access
+token by itself on every call, so VOXEL FC can run unattended for
+hours/days.
 
-Uso:
+Usage:
     python scripts/dropbox_oauth.py
 """
 from __future__ import annotations
@@ -31,8 +31,8 @@ def load_app_credentials() -> tuple[str, str]:
     app_secret = values.get("DROPBOX_APP_SECRET")
     if not app_key or not app_secret:
         raise SystemExit(
-            f"DROPBOX_APP_KEY/DROPBOX_APP_SECRET nao encontrados em {ENV_PATH}. "
-            "Preencha-os antes de rodar este script."
+            f"DROPBOX_APP_KEY/DROPBOX_APP_SECRET not found in {ENV_PATH}. "
+            "Fill them in before running this script."
         )
     return app_key, app_secret
 
@@ -80,22 +80,22 @@ def main() -> None:
     app_key, app_secret = load_app_credentials()
     url = build_authorize_url(app_key)
 
-    print("Abra esta URL, faca login e clique em Allow:")
+    print("Open this URL, log in, and click Allow:")
     print(url)
     print()
-    webbrowser.open(url)  # em maquina sem navegador (SSH), simplesmente nao faz nada
+    webbrowser.open(url)  # on a machine without a browser (SSH), this simply does nothing
 
-    code = input("Cole aqui o codigo mostrado pelo Dropbox apos autorizar: ").strip()
+    code = input("Paste the code shown by Dropbox after authorizing here: ").strip()
     tokens = exchange_code_for_tokens(code, app_key, app_secret)
 
     refresh_token = tokens.get("refresh_token")
     if not refresh_token:
-        raise SystemExit(f"Resposta da API sem refresh_token: {tokens}")
+        raise SystemExit(f"API response without refresh_token: {tokens}")
 
     update_env_file(refresh_token)
     print()
-    print(f"DROPBOX_REFRESH_TOKEN atualizado com sucesso em {ENV_PATH}")
-    print("Escopos concedidos:", tokens.get("scope", "(nao informado pela API)"))
+    print(f"DROPBOX_REFRESH_TOKEN successfully updated in {ENV_PATH}")
+    print("Scopes granted:", tokens.get("scope", "(not reported by the API)"))
 
 
 if __name__ == "__main__":

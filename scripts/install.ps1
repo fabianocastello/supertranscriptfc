@@ -1,60 +1,60 @@
-# Instalador do VOXEL FC para Windows (ex: ps20).
-# Cada maquina roda de forma totalmente independente: venv proprio, modelos
-# proprios em $HOME\.voxelfc\models. Nada e' compartilhado pela rede.
+# VOXEL FC installer for Windows (e.g. ps20).
+# Each machine runs fully independently: its own venv, its own models in
+# $HOME\.voxelfc\models. Nothing is shared over the network.
 
 $ErrorActionPreference = "Stop"
 
 $RepoDir = Split-Path -Parent $PSScriptRoot
 Set-Location $RepoDir
 
-Write-Host "== VOXEL FC: instalacao (Windows) =="
+Write-Host "== VOXEL FC: installation (Windows) =="
 
-# --- 1. Verificar Python 3.10+ ---
+# --- 1. Check Python 3.10+ ---
 $python = Get-Command python -ErrorAction SilentlyContinue
 if (-not $python) {
-    Write-Error "Python nao encontrado no PATH. Instale o Python 3.10+ (python.org ou winget install Python.Python.3.12) antes de continuar."
+    Write-Error "Python not found in PATH. Install Python 3.10+ (python.org or winget install Python.Python.3.12) before continuing."
     exit 1
 }
 
-# --- 2. Verificar FFmpeg ---
+# --- 2. Check FFmpeg ---
 $ffmpeg = Get-Command ffmpeg -ErrorAction SilentlyContinue
 if (-not $ffmpeg) {
-    Write-Warning "FFmpeg nao encontrado."
-    Write-Host "Instale com: winget install Gyan.FFmpeg   (ou choco install ffmpeg)"
+    Write-Warning "FFmpeg not found."
+    Write-Host "Install with: winget install Gyan.FFmpeg   (or choco install ffmpeg)"
     exit 1
 }
 
-# --- 3. Criar venv ---
+# --- 3. Create venv ---
 if (-not (Test-Path ".venv")) {
-    Write-Host "Criando ambiente virtual em .venv ..."
+    Write-Host "Creating virtual environment in .venv ..."
     python -m venv .venv
 }
 & .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip -q
 
-# --- 4. Detectar GPU NVIDIA (CUDA) ---
+# --- 4. Detect NVIDIA GPU (CUDA) ---
 $Extras = "dropbox,transcribe,diarize"
 $hasNvidia = Get-Command nvidia-smi -ErrorAction SilentlyContinue
 if ($hasNvidia) {
-    Write-Host "GPU NVIDIA detectada: instalando com suporte a CUDA."
+    Write-Host "NVIDIA GPU detected: installing with CUDA support."
     $Extras = "$Extras,cuda"
 } else {
-    Write-Host "Nenhuma GPU NVIDIA detectada (ex: ps20): instalando torch/torchaudio CPU-only (menor download)."
+    Write-Host "No NVIDIA GPU detected (e.g. ps20): installing CPU-only torch/torchaudio (smaller download)."
     pip install -q --index-url https://download.pytorch.org/whl/cpu torch torchaudio
 }
 
-Write-Host "Instalando o pacote (extras: $Extras) ..."
+Write-Host "Installing the package (extras: $Extras) ..."
 pip install -q -e ".[$Extras]"
 
-# --- 5. Criar .env a partir do exemplo, se necessario ---
+# --- 5. Create .env from the example, if needed ---
 if (-not (Test-Path ".env")) {
     Copy-Item ".env.example" ".env"
-    Write-Host "Arquivo .env criado a partir de .env.example. Preencha DROPBOX_ACCESS_TOKEN e HF_TOKEN."
+    Write-Host "Created .env from .env.example. Fill in DROPBOX_APP_KEY, DROPBOX_APP_SECRET, DROPBOX_REFRESH_TOKEN, and HF_TOKEN."
 }
 
 Write-Host ""
-Write-Host "Instalacao concluida nesta maquina."
-Write-Host "Modelos e cache ficarao em: $HOME\.voxelfc\models"
-Write-Host "Para usar:"
+Write-Host "Installation complete on this machine."
+Write-Host "Models and cache will live in: $HOME\.voxelfc\models"
+Write-Host "To use it:"
 Write-Host "  .\.venv\Scripts\Activate.ps1"
-Write-Host "  voxelfc --source C:\caminho\audio.mp3 --local"
+Write-Host "  voxelfc --source C:\path\to\audio.mp3 --local"

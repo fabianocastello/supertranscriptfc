@@ -1,16 +1,16 @@
 # Quick guide — VOXEL FC
 
-Este guia cobre a instalação mínima e os comandos operacionais do projeto:
+This guide covers the minimal installation and the project's operational commands:
 
-- processar áudios e gerar transcripts;
-- consultar locks ativos no Dropbox;
-- remover locks antigos com segurança.
+- process audio files and generate transcripts;
+- check active locks on Dropbox;
+- safely remove stale locks.
 
-Para a descrição completa do pipeline, veja o [README.md](README.md).
+For the full pipeline description, see [README.md](README.md).
 
 ---
 
-## 1. Pré-requisitos
+## 1. Prerequisites
 
 ### Linux (Debian/Ubuntu)
 
@@ -21,14 +21,14 @@ sudo apt install -y python3 python3-venv ffmpeg git
 
 ### macOS (Apple Silicon)
 
-Confirme que o terminal está usando o Homebrew nativo arm64:
+Confirm the terminal is using native arm64 Homebrew:
 
 ```bash
 arch
 /opt/homebrew/bin/brew --version
 ```
 
-Instale as dependências:
+Install the dependencies:
 
 ```bash
 /opt/homebrew/bin/brew install python@3.12 ffmpeg git
@@ -36,14 +36,14 @@ Instale as dependências:
 
 ### Windows
 
-Instale Python 3.12 e Git:
+Install Python 3.12 and Git:
 
 ```powershell
 winget install Python.Python.3.12
 winget install Git.Git
 ```
 
-Confirme que `python` não é o alias da Microsoft Store:
+Confirm that `python` isn't the Microsoft Store alias:
 
 ```powershell
 python --version
@@ -52,7 +52,7 @@ git --version
 
 ---
 
-## 2. Instalar o projeto
+## 2. Install the project
 
 ### Linux/macOS
 
@@ -63,7 +63,7 @@ cd ~/voxelfc
 source .venv/bin/activate
 ```
 
-No macOS Apple Silicon, se houver mais de um Python instalado:
+On Apple Silicon macOS, if more than one Python is installed:
 
 ```bash
 PYTHON_BIN=/opt/homebrew/bin/python3.12 ./scripts/install.sh
@@ -81,9 +81,9 @@ scripts\install.bat
 
 ---
 
-## 3. Configurar o `.env`
+## 3. Configure the `.env`
 
-O instalador cria `.env` a partir de `.env.example`. Preencha estes campos:
+The installer creates `.env` from `.env.example`. Fill in these fields:
 
 ```dotenv
 DROPBOX_APP_KEY=...
@@ -92,20 +92,20 @@ DROPBOX_REFRESH_TOKEN=...
 HF_TOKEN=...
 ```
 
-O `DROPBOX_REFRESH_TOKEN` é usado pelos comandos de auditoria e pelo pipeline.
-Para gerar ou renovar o token:
+`DROPBOX_REFRESH_TOKEN` is used by the audit commands and by the pipeline.
+To generate or renew the token:
 
 ```bash
 python scripts/dropbox_oauth.py
 ```
 
-Mantenha o `.env` local, fora do Git, e não coloque credenciais em logs ou relatórios.
+Keep `.env` local, outside of Git, and don't put credentials into logs or reports.
 
 ---
 
-## 4. Processar um áudio
+## 4. Process an audio file
 
-Ative o ambiente virtual antes dos comandos:
+Activate the virtual environment before running any commands:
 
 ```bash
 # Linux/macOS
@@ -115,23 +115,23 @@ source .venv/bin/activate
 .venv\Scripts\Activate.ps1
 ```
 
-Processar um arquivo local:
+Process a local file:
 
 ```bash
-voxelfc --source /caminho/audio.mp3 --local
+voxelfc --source /path/to/audio.mp3 --local
 ```
 
-Processar um arquivo no Dropbox:
+Process a file on Dropbox:
 
 ```bash
-voxelfc --source /Gravacoes/reuniao.mp3
+voxelfc --source /Recordings/meeting.mp3
 ```
 
-Teste inicial recomendado:
+Recommended initial test:
 
 ```bash
 voxelfc \
-  --source /caminho/audio_curto.mp3 \
+  --source /path/to/short_audio.mp3 \
   --local \
   --model-size small \
   --language pt
@@ -139,41 +139,41 @@ voxelfc \
 
 ---
 
-## 5. Consultar locks no Dropbox
+## 5. Check locks on Dropbox
 
-O comando abaixo usa o `.env`, acessa a pasta remota e lista os locks com máquina,
-arquivo, início e tempo decorrido:
+The command below uses `.env`, accesses the remote folder, and lists the locks with
+machine, file, start time, and elapsed time:
 
 ```bash
 python ./tools/status.py /_AudioMemosFC/MamyCalls
 ```
 
-No Windows PowerShell, use o mesmo comando:
+On Windows PowerShell, use the same command:
 
 ```powershell
 python .\tools\status.py /_AudioMemosFC/MamyCalls
 ```
 
-A consulta é somente leitura no Dropbox. Ela lê os locks e, quando a duração não está no
-front matter do transcript, baixa temporariamente o áudio correspondente para medir a
-duração com `ffprobe`; o arquivo temporário local é removido ao fim. Nenhum arquivo no
-Dropbox é criado, alterado ou removido.
+The query is read-only on Dropbox. It reads the locks and, when the duration isn't in
+the transcript's front matter, temporarily downloads the corresponding audio file to
+measure the duration with `ffprobe`; the local temporary file is removed at the end.
+No file on Dropbox is created, changed, or removed.
 
-Exemplo de outra pasta:
+Example with another folder:
 
 ```bash
-python ./tools/status.py /Outra/Pasta
+python ./tools/status.py /Other/Folder
 ```
 
-O caminho da pasta Dropbox deve começar com `/`.
+The Dropbox folder path must start with `/`.
 
 ---
 
-## 6. Remover locks antigos
+## 6. Remove stale locks
 
-### Primeiro: simular
+### First: simulate
 
-Sempre confira os candidatos antes de remover:
+Always review the candidates before removing anything:
 
 ```bash
 python ./tools/remove_locks.py \
@@ -182,9 +182,9 @@ python ./tools/remove_locks.py \
   --dry-run
 ```
 
-### Depois: remover
+### Then: remove
 
-Se confirmar que os locks não correspondem a processos ainda executando:
+Once you've confirmed the locks don't correspond to still-running processes:
 
 ```bash
 python ./tools/remove_locks.py \
@@ -192,19 +192,19 @@ python ./tools/remove_locks.py \
   --older_than 10m
 ```
 
-A comparação é estrita: só são removidos locks com idade **maior** que o limite.
-Locks sem data interpretável nunca são removidos automaticamente.
+The comparison is strict: only locks **older** than the threshold are removed.
+Locks without a parseable date are never removed automatically.
 
-### Formatos aceitos
+### Accepted formats
 
 ```text
-30s    30 segundos
-10m    10 minutos
-1h     1 hora
-2h     2 horas
+30s    30 seconds
+10m    10 minutes
+1h     1 hour
+2h     2 hours
 ```
 
-### Formatos rejeitados
+### Rejected formats
 
 ```text
 10
@@ -213,8 +213,7 @@ Locks sem data interpretável nunca são removidos automaticamente.
 1d
 ```
 
-O argumento precisa ser um número inteiro positivo seguido imediatamente por `s`, `m`
-ou `h`:
+The argument must be a positive integer immediately followed by `s`, `m`, or `h`:
 
 ```text
 --older_than 30s
@@ -222,38 +221,38 @@ ou `h`:
 --older_than 1h
 ```
 
-> Segurança: antes de apagar um lock, confirme na máquina indicada que não existe
-> uma execução real correspondente. Remover um lock ativo pode permitir que outro
-> processo inicie o mesmo áudio em paralelo.
+> Safety: before deleting a lock, confirm on the indicated machine that there's no
+> real run actually corresponding to it. Removing an active lock can let another
+> process start the same audio file in parallel.
 
 ---
 
-## 7. Auditoria completa
+## 7. Full audit
 
-Para gerar o relatório completo — front matter, métricas de conversão, lista de
-transcripts e locks — use:
+To generate the complete report — front matter, conversion metrics, list of
+transcripts and locks — use:
 
 ```bash
 python ./tools/audit.py /_AudioMemosFC/MamyCalls
 ```
 
-O relatório é salvo localmente em:
+The report is saved locally at:
 
 ```text
 tools/YYYY-MM-DD-HH-MM__AudioMemosFC_MamyCalls.md
 ```
 
-Esse comando também é somente leitura em relação ao Dropbox. Durante a consulta, ele
-mostra o progresso na mesma linha — conexão, listagem, leitura dos transcripts, análise
-dos locks e medição dos áudios — para deixar claro que continua executando. Para medir
-a duração dos áudios associados aos locks, pode baixá-los temporariamente e usar
-`ffprobe`; os temporários locais são removidos ao fim. As métricas de conversão
-consideram somente áudios com pelo menos 1 minuto; os demais continuam listados, mas
-não entram nos cálculos.
+This command is also read-only with respect to Dropbox. During the query, it shows
+progress on the same line — connecting, listing, reading transcripts, analyzing
+locks, and measuring audio files — to make it clear it's still running. To measure
+the duration of audio files associated with locks, it may download them temporarily
+and use `ffprobe`; the local temporary files are removed at the end. The conversion
+metrics only consider audio files with at least 1 minute; the rest remain listed, but
+aren't included in the calculations.
 
 ---
 
-## 8. Validar a instalação
+## 8. Validate the installation
 
 ```bash
 python -m py_compile \
@@ -263,14 +262,14 @@ python -m py_compile \
   tools/audit.py
 ```
 
-Testar a ajuda sem acessar o Dropbox:
+Test the help text without accessing Dropbox:
 
 ```bash
 python ./tools/status.py --help
 python ./tools/remove_locks.py --help
 ```
 
-Testar a validação de formato sem remover nada:
+Test format validation without removing anything:
 
 ```bash
 python ./tools/remove_locks.py \

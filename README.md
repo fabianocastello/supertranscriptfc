@@ -1,139 +1,139 @@
 # VOXEL FC — File Companion
 
-Baixa um audio de uma pasta do Dropbox, transcreve, diariza as vozes por
-locutor (`Pessoa 1`, `Pessoa 2`, ...) e envia `.transcriptFC.txt` / `.srt` /
-`.voxcelfc.vtt` de volta ao Dropbox.
+Downloads an audio file from a Dropbox folder, transcribes it, diarizes the
+speakers (`Person 1`, `Person 2`, ...), and uploads `.transcriptFC.txt` /
+`.srt` / `.voxcelfc.vtt` back to Dropbox.
 
-`voxelfc` e o nome tecnico do produto. Durante a migracao, o comando legado
-`supertranscriptfc` continua disponivel como alias depreciado. O
-`scripts/update.sh` faz `git pull`, reexecuta a si proprio quando o proprio
-arquivo foi atualizado e usa diretamente `.venv/bin/python` e
-`.venv/bin/voxelfc`, evitando conflitos com Miniconda ou outro Python no PATH.
+`voxelfc` is the product's technical name. During the migration, the legacy
+`supertranscriptfc` command remains available as a deprecated alias.
+`scripts/update.sh` runs `git pull`, re-executes itself when the file itself
+was updated, and uses `.venv/bin/python` and `.venv/bin/voxelfc` directly,
+avoiding conflicts with Miniconda or another Python on PATH.
 
-Cada maquina onde o projeto for instalado roda **de forma totalmente
-independente**: ambiente virtual proprio, modelos proprios baixados e
-armazenados em `~/.voxelfc/models` (Linux/macOS) ou
-`%USERPROFILE%\.voxelfc\models` (Windows). Nao ha nenhum modelo ou
-cache compartilhado entre maquinas.
+Every machine where the project is installed runs **fully independently**:
+its own virtual environment, its own models downloaded and stored in
+`~/.voxelfc/models` (Linux/macOS) or `%USERPROFILE%\.voxelfc\models`
+(Windows). No model or cache is shared between machines.
 
-Para instalar rapido em Linux, macOS ou Windows, veja o
+For a quick install on Linux, macOS, or Windows, see
 [quickInstall.md](quickInstall.md).
 
-## Instalacao
+## Installation
 
-Pre-requisitos em qualquer maquina: Python 3.10+ e FFmpeg no PATH.
+Prerequisites on any machine: Python 3.10+ and FFmpeg in PATH.
 
-### Linux (thor25, leno18) e macOS (MacBook Air M1)
+### Linux (thor25, leno18) and macOS (MacBook Air M1)
 
 ```bash
 ./scripts/install.sh
 ```
 
-- Detecta GPU NVIDIA automaticamente (thor25) e instala o `torch` com CUDA;
-  nas demais (leno18, MacBook) instala a variante CPU-only.
-- No MacBook Air M1, a diarizacao (`pyannote.audio`/torch) usa aceleracao MPS
-  automaticamente quando disponivel; a transcricao (`faster-whisper`) roda em
-  CPU, pois o `ctranslate2` nao suporta MPS.
+- Automatically detects an NVIDIA GPU (thor25) and installs `torch` with
+  CUDA; on the others (leno18, MacBook) installs the CPU-only variant.
+- On the MacBook Air M1, diarization (`pyannote.audio`/torch) uses MPS
+  acceleration automatically when available; transcription
+  (`faster-whisper`) runs on CPU, since `ctranslate2` doesn't support MPS.
 
 ### Windows (ps20)
 
-No PowerShell:
+In PowerShell:
 
 ```powershell
 .\scripts\install.ps1
 ```
 
-Ou de' duplo-clique em `scripts\install.bat` (wrapper que chama o script acima
-contornando a politica de execucao padrao do PowerShell).
+Or double-click `scripts\install.bat` (a wrapper that calls the script above,
+bypassing PowerShell's default execution policy).
 
-Instala `torch` CPU-only (ps20 nao tem GPU dedicada).
+Installs CPU-only `torch` (ps20 has no dedicated GPU).
 
-Depois de instalar em qualquer plataforma, edite o arquivo `.env` criado a
-partir de `.env.example` e preencha:
+After installing on any platform, edit the `.env` file created from
+`.env.example` and fill in:
 
-- `DROPBOX_APP_KEY`, `DROPBOX_APP_SECRET`, `DROPBOX_REFRESH_TOKEN` — credenciais
-  OAuth2 do App Dropbox (fluxo de refresh token, sem expiracao — o SDK renova
-  o access token automaticamente a cada chamada).
-- `HF_TOKEN` — token do Hugging Face com acesso aos modelos
-  `pyannote/speaker-diarization-3.1` e `pyannote/segmentation-3.0` (aceite os
-  termos de uso de cada um no site do Hugging Face antes de usar).
+- `DROPBOX_APP_KEY`, `DROPBOX_APP_SECRET`, `DROPBOX_REFRESH_TOKEN` — Dropbox
+  App OAuth2 credentials (refresh token flow, no expiration — the SDK
+  renews the access token automatically on every call).
+- `HF_TOKEN` — Hugging Face token with access to the
+  `pyannote/speaker-diarization-3.1` and `pyannote/segmentation-3.0` models
+  (accept each one's terms of use on the Hugging Face site before using them).
 
-## Uso
+## Usage
 
-Antes de qualquer comando abaixo, ative o ambiente virtual:
+Before running any command below, activate the virtual environment:
 
 ```bash
 source .venv/bin/activate          # Linux/macOS
 ```
 ```cmd
-.venv\Scripts\activate.bat         :: Windows, no cmd.exe
+.venv\Scripts\activate.bat         :: Windows, in cmd.exe
 ```
 ```powershell
-.venv\Scripts\Activate.ps1         # Windows, no PowerShell
+.venv\Scripts\Activate.ps1         # Windows, in PowerShell
 ```
 
-Processar um arquivo local (sem tocar no Dropbox — util para testar):
+Process a local file (without touching Dropbox — useful for testing):
 
 ```bash
-voxelfc --source /caminho/audio.mp3 --local
+voxelfc --source /path/to/audio.mp3 --local
 ```
 
-Processar um arquivo do Dropbox (baixa, processa e envia de volta para a
-mesma pasta de origem):
+Process a file from Dropbox (downloads, processes, and uploads back to the
+same source folder):
 
 ```bash
-voxelfc --source /Gravacoes/reuniao.mp3
+voxelfc --source /Recordings/meeting.mp3
 ```
 
-Especificando uma pasta de destino diferente no Dropbox:
+Specifying a different destination folder on Dropbox:
 
 ```bash
-voxelfc --source /Gravacoes/reuniao.mp3 --dest /Gravacoes/Transcricoes
+voxelfc --source /Recordings/meeting.mp3 --dest /Recordings/Transcripts
 ```
 
-Outras opcoes uteis: `--model-size`, `--device {auto,cpu,cuda}`,
+Other useful options: `--model-size`, `--device {auto,cpu,cuda}`,
 `--language pt`, `--min-speakers`, `--max-speakers`, `--min-minutes` /
-`--max-minutes` (ignora audios fora dessa faixa de duracao — pode usar um,
-outro ou ambos), `--vtt` (gera `.vtt` tambem), `--keep-temp` (nao apaga
-temporarios), `--force` (reprocessa mesmo se ja tiver sido concluido antes).
+`--max-minutes` (skip audio files outside that duration range — you can use
+one, the other, or both), `--vtt` (also generate `.vtt`), `--keep-temp`
+(don't delete temporary files), `--force` (reprocess even if already
+completed before).
 
-## Compatibilidade e migracao
+## Compatibility and migration
 
-Novas instalacoes usam `~/.voxelfc` e a variavel `VOXELFC_HOME`. Instalacoes
-existentes que ainda possuem `~/.supertranscriptfc` sao preservadas e podem ser
-usadas automaticamente durante a transicao. Para migrar deliberadamente,
-pare os workers e simule primeiro:
+New installations use `~/.voxelfc` and the `VOXELFC_HOME` variable. Existing
+installations that still have `~/.supertranscriptfc` are preserved and can
+be used automatically during the transition. To migrate deliberately, stop
+the workers and simulate first:
 
 ```bash
 python scripts/migrate_home.py --from ~/.supertranscriptfc --to ~/.voxelfc --dry-run
 python scripts/migrate_home.py --from ~/.supertranscriptfc --to ~/.voxelfc
 ```
 
-O diretorio antigo nao e apagado. Em caso de rollback, defina
-`VOXELFC_HOME=~/.supertranscriptfc`. Os nomes Dropbox `.transcriptFC.txt`,
-`.srt`, `.voxcelfc.vtt` e `.transcriptFC.lock` permanecem
-estaveis para que audios ja processados nao sejam executados novamente.
+The old directory isn't deleted. In case of rollback, set
+`VOXELFC_HOME=~/.supertranscriptfc`. The Dropbox filenames
+`.transcriptFC.txt`, `.srt`, `.voxcelfc.vtt`, and `.transcriptFC.lock`
+remain stable so that already-processed audio files aren't run again.
 
 
-Cada etapa (download, conversao, transcricao, diarizacao, saidas, upload) e'
-marcada em `~/.voxelfc/tmp/<job_id>/progress.json`. Se o processo
-for interrompido, rodar o mesmo comando novamente retoma de onde parou, sem
-refazer etapas concluidas.
+Each stage (download, conversion, transcription, diarization, outputs,
+upload) is recorded in `~/.voxelfc/tmp/<job_id>/progress.json`. If the
+process is interrupted, running the same command again resumes from where
+it left off, without redoing completed stages.
 
-Arquivos ja processados com sucesso ficam registrados em
-`~/.voxelfc/processed_files.json` e nao sao reprocessados nas
-execucoes seguintes (a menos que `--force` seja usado), mesmo depois que os
-temporarios daquele job forem removidos.
+Files already processed successfully are recorded in
+`~/.voxelfc/processed_files.json` and aren't reprocessed on subsequent runs
+(unless `--force` is used), even after that job's temporary files have been
+removed.
 
-## Espaco em disco esperado
+## Expected disk space
 
-- ~20 GB permanentes em `~/.voxelfc/models` para os modelos.
-- ~10 GB temporarios por processamento em `~/.voxelfc/tmp`
-  (audio original + WAV intermediario), removidos automaticamente ao final
-  a menos que `--keep-temp` seja usado.
+- ~20 GB permanent in `~/.voxelfc/models` for the models.
+- ~10 GB temporary per processing run in `~/.voxelfc/tmp` (original audio +
+  intermediate WAV), removed automatically at the end unless `--keep-temp`
+  is used.
 
-## Limitacoes conhecidas
+## Known limitations
 
-A diarizacao (separacao por locutor) nao e' perfeita: audios com ruido de
-fundo, vozes muito parecidas ou falas simultaneas podem gerar atribuicoes
-incorretas de locutor.
+Diarization (speaker separation) isn't perfect: audio with background
+noise, very similar voices, or overlapping speech can produce incorrect
+speaker assignments.

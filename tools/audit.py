@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""Auditoria somente leitura dos transcripts/locks de uma pasta Dropbox.
+"""Read-only audit of the transcripts/locks in a Dropbox folder.
 
-Pode baixar temporariamente áudios associados a locks para obter a duração com ffprobe;
-não cria arquivos no Dropbox e não altera nenhum dado remoto.
-Lê somente metadados e conteúdo remoto; arquivos temporários locais são removidos ao fim.
+May temporarily download audio files associated with locks to measure their
+duration with ffprobe; it does not create files on Dropbox and does not
+change any remote data.
+Only reads remote metadata and content; local temporary files are removed
+at the end.
 
-Uso:
+Usage:
     python ./tools/audit.py /_AudioMemosFC/MamyCalls
-    python ./tools/audit.py /Outra/Pasta --output tools/relatorio.md
+    python ./tools/audit.py /Other/Folder --output tools/report.md
 """
 from __future__ import annotations
 
@@ -33,7 +35,7 @@ _PROGRESS_WIDTH = 0
 
 
 def progress(message: str, *, done: bool = False) -> None:
-    """Mostra progresso sem criar uma linha nova a cada etapa."""
+    """Shows progress without creating a new line on every step."""
     global _PROGRESS_WIDTH
     text = f"[audit] {message}"
     padding = max(0, _PROGRESS_WIDTH - len(text))
@@ -57,7 +59,7 @@ def parse_duration(value: str | None) -> float | None:
 
 def format_seconds(seconds: float | None) -> str:
     if seconds is None:
-        return "n/d"
+        return "n/a"
     total = max(0, int(round(seconds)))
     hours, remainder = divmod(total, 3600)
     minutes, secs = divmod(remainder, 60)
@@ -70,24 +72,24 @@ def format_seconds(seconds: float | None) -> str:
 
 def format_elapsed_humanized(seconds: float | None) -> str:
     if seconds is None:
-        return "n/d"
+        return "n/a"
     total = max(0, int(round(seconds)))
     if total < 10:
-        return "há alguns segundos"
+        return "a few seconds ago"
     hours, remainder = divmod(total, 3600)
     minutes, secs = divmod(remainder, 60)
     parts: list[str] = []
     if hours:
-        parts.append(f"{hours} hora" if hours == 1 else f"{hours} horas")
+        parts.append(f"{hours} hour" if hours == 1 else f"{hours} hours")
     if minutes:
-        parts.append(f"{minutes} minuto" if minutes == 1 else f"{minutes} minutos")
+        parts.append(f"{minutes} minute" if minutes == 1 else f"{minutes} minutes")
     if not hours and not minutes:
-        parts.append(f"{secs} segundo" if secs == 1 else f"{secs} segundos")
+        parts.append(f"{secs} second" if secs == 1 else f"{secs} seconds")
     elif secs >= 30:
-        parts.append(f"{secs} segundo" if secs == 1 else f"{secs} segundos")
+        parts.append(f"{secs} second" if secs == 1 else f"{secs} seconds")
     if len(parts) == 1:
-        return "há " + parts[0]
-    return "há " + ", ".join(parts[:-1]) + " e " + parts[-1]
+        return parts[0] + " ago"
+    return ", ".join(parts[:-1]) + " and " + parts[-1] + " ago"
 
 
 def parse_front_matter(text: str) -> tuple[bool, dict[str, str]]:
@@ -129,15 +131,16 @@ def relative_name(path: str, root: str) -> str:
 
 
 def normalize_lock_start(started_at: datetime, server_modified: datetime) -> tuple[datetime, str]:
-    """Converte o horario local sem fuso do lock para UTC.
+    """Converts the lock's local, offset-less timestamp to UTC.
 
-    O pipeline grava datetime.now().isoformat() sem offset. O Dropbox fornece
-    server_modified em UTC, tambem sem tzinfo nesta versao do SDK. A diferenca
-    entre ambos permite inferir o fuso da maquina, arredondando para a hora
-    mais proxima; isso corrige, por exemplo, vpsfc01 em UTC+02 e hosts em UTC-03.
+    The pipeline records datetime.now().isoformat() without an offset. Dropbox
+    provides server_modified in UTC, also without tzinfo in this SDK version.
+    The difference between the two lets us infer the machine's timezone,
+    rounding to the nearest hour; this corrects, for example, vpsfc01 in
+    UTC+02 and hosts in UTC-03.
     """
     if started_at.tzinfo is not None:
-        return started_at.astimezone(timezone.utc), "explicito"
+        return started_at.astimezone(timezone.utc), "explicit"
     server_utc = server_modified.replace(tzinfo=timezone.utc)
     delta_hours = (server_utc.replace(tzinfo=None) - started_at).total_seconds() / 3600
     offset_hours = round(-delta_hours)
@@ -160,22 +163,22 @@ def age_seconds(started_utc: datetime, now_utc: datetime) -> float:
 def audit(root: str, env_path: Path) -> dict:
     import dropbox
 
-    progress("lendo credenciais do .env")
+    progress("reading credentials from .env")
     cfg = dotenv_values(env_path)
     required = ("DROPBOX_APP_KEY", "DROPBOX_APP_SECRET", "DROPBOX_REFRESH_TOKEN")
     missing = [key for key in required if not cfg.get(key)]
     if missing:
-        raise RuntimeError(f"Variaveis ausentes no .env: {', '.join(missing)}")
+        raise RuntimeError(f"Missing variables in .env: {', '.join(missing)}")
 
     dbx = dropbox.Dropbox(
         oauth2_refresh_token=cfg["DROPBOX_REFRESH_TOKEN"],
         app_key=cfg["DROPBOX_APP_KEY"],
         app_secret=cfg["DROPBOX_APP_SECRET"],
     )
-    progress("conectando ao Dropbox")
+    progress("connecting to Dropbox")
     now = datetime.now().astimezone()
     now_utc = now.astimezone(timezone.utc)
-    progress("listando arquivos da pasta")
+    progress("listing files in the folder")
     entries = remote_entries(dbx, root)
 
     files = {entry.path_display: entry for entry in entries}
@@ -185,18 +188,22 @@ def audit(root: str, env_path: Path) -> dict:
     transcript_paths = sorted(path for path in files if path.endswith(TRANSCRIPT_SUFFIX))
     lock_paths = sorted(path for path in files if path.endswith(LOCK_SUFFIX))
     progress(
-        f"Dropbox listado: {len(audio_paths)} áudios, {len(transcript_paths)} transcripts e {len(lock_paths)} locks"
+        f"Dropbox listed: {len(audio_paths)} audio files, {len(transcript_paths)} transcripts, and {len(lock_paths)} locks"
     )
 
     transcripts = []
     for index, path in enumerate(transcript_paths, start=1):
-        progress(f"lendo transcript {index}/{len(transcript_paths)}")
+        progress(f"reading transcript {index}/{len(transcript_paths)}")
         text = read_remote_text(dbx, path)
         has_front_matter, fields = parse_front_matter(text)
         stem = path[: -len(TRANSCRIPT_SUFFIX)]
         audio_path = next((f"{stem}{ext}" for ext in AUDIO_EXTENSIONS if f"{stem}{ext}" in files), None)
-        audio_duration = parse_duration(fields.get("duracao_audio"))
-        conversion_seconds = parse_duration(fields.get("tempo_conversao"))
+        # NOTE: "audio_duration"/"conversion_time" match the front-matter field
+        # names in use when this tool was updated. If the pipeline's
+        # front-matter field names change, these lookups must be updated to
+        # match, or metrics below will silently come out empty.
+        audio_duration = parse_duration(fields.get("audio_duration"))
+        conversion_seconds = parse_duration(fields.get("conversion_time"))
         rtf = conversion_seconds / audio_duration if audio_duration and conversion_seconds is not None else None
         transcripts.append(
             {
@@ -217,7 +224,7 @@ def audit(root: str, env_path: Path) -> dict:
     }
     locks = []
     for index, path in enumerate(lock_paths, start=1):
-        progress(f"analisando lock {index}/{len(lock_paths)}")
+        progress(f"analyzing lock {index}/{len(lock_paths)}")
         text = read_remote_text(dbx, path)
         fields = {}
         for line in text.splitlines():
@@ -225,7 +232,10 @@ def audit(root: str, env_path: Path) -> dict:
                 key, value = line.split(":", 1)
                 fields[key.strip()] = value.strip()
         started_at = None
-        started_raw = fields.get("Iniciado em")
+        # NOTE: "Started at"/"Processing on" match the lock content field
+        # labels in use when this tool was updated. If the pipeline's lock
+        # format changes, these lookups must be updated to match.
+        started_raw = fields.get("Started at")
         if started_raw:
             try:
                 started_at = datetime.fromisoformat(started_raw)
@@ -233,7 +243,7 @@ def audit(root: str, env_path: Path) -> dict:
                 pass
         server_modified = files[path].server_modified
         started_utc = None
-        start_timezone = "n/d"
+        start_timezone = "n/a"
         if started_at:
             started_utc, start_timezone = normalize_lock_start(started_at, server_modified)
         age = age_seconds(started_utc, now_utc) if started_utc else None
@@ -243,14 +253,14 @@ def audit(root: str, env_path: Path) -> dict:
             for extension in AUDIO_EXTENSIONS:
                 audio_path = path[: -len(LOCK_SUFFIX)] + extension
                 if audio_path in files:
-                    progress(f"medindo áudio do lock {index}/{len(lock_paths)}")
+                    progress(f"measuring audio for lock {index}/{len(lock_paths)}")
                     audio_duration = probe_remote_audio_duration(dbx, audio_path)
                     break
         locks.append(
             {
                 "path": path,
                 "name": relative_name(path, root),
-                "machine": fields.get("Processando por", "desconhecida"),
+                "machine": fields.get("Processing on", "unknown"),
                 "started_at": started_raw,
                 "started_at_utc": started_utc.isoformat(timespec="seconds") if started_utc else None,
                 "start_timezone": start_timezone,
@@ -262,7 +272,7 @@ def audit(root: str, env_path: Path) -> dict:
             }
         )
 
-    progress("consulta concluída", done=True)
+    progress("query complete", done=True)
     return {
         "generated_at": now.isoformat(timespec="seconds"),
         "root": root,
@@ -313,44 +323,44 @@ def make_report(data: dict) -> str:
     ]
     recent_by_machine: dict[str, list[dict]] = {}
     for item in recent_12h:
-        recent_by_machine.setdefault(item["fields"].get("running_on", "n/d"), []).append(item)
+        recent_by_machine.setdefault(item["fields"].get("running_on", "n/a"), []).append(item)
 
     report_tz = datetime.fromisoformat(data["generated_at"]).tzinfo or timezone.utc
 
     def lock_started_display(item: dict) -> str:
         if not item.get("started_at_utc"):
-            return "n/d"
+            return "n/a"
         started = datetime.fromisoformat(item["started_at_utc"])
         return started.astimezone(report_tz).strftime("%Y-%m-%d %H:%M:%S")
 
     def metric_text(item: dict) -> tuple[str, str, str]:
         duration = item["audio_duration_seconds"]
         if duration is None:
-            return "n/d (sem front matter)", "n/d (sem front matter)", "n/d (sem front matter)"
+            return "n/a (no front matter)", "n/a (no front matter)", "n/a (no front matter)"
         if duration < MIN_AUDIO_FOR_METRICS_SECONDS:
-            return "não calculado (<1 min)", "não calculado (<1 min)", "não calculado (<1 min)"
+            return "not calculated (<1 min)", "not calculated (<1 min)", "not calculated (<1 min)"
         conversion = item["conversion_seconds"]
         rtf = item["conversion_rtf"]
         if conversion is None or rtf is None:
-            return "n/d", "n/d", "n/d"
+            return "n/a", "n/a", "n/a"
         rtf_text = f"{rtf:.3f}x"
-        inverse = f"{1 / rtf:.2f} min/min" if rtf > 0 else "n/d (conversão arredondada para 0s)"
+        inverse = f"{1 / rtf:.2f} min/min" if rtf > 0 else "n/a (conversion rounded to 0s)"
         return format_seconds(conversion), rtf_text, inverse
 
     lines = [
-        "# Auditoria VOXEL FC — MamyCalls",
+        "# VOXEL FC Audit — MamyCalls",
         "",
-        f"- **Pasta Dropbox:** `{data['root']}`",
-        f"- **Consulta realizada em:** `{data['generated_at']}`",
-        f"- **Áudios encontrados:** {data['audio_count']}",
-        f"- **Transcripts `.transcriptFC.txt`:** {data['transcript_count']}",
-        f"- **Locks encontrados:** {data['lock_count']}",
+        f"- **Dropbox folder:** `{data['root']}`",
+        f"- **Query performed at:** `{data['generated_at']}`",
+        f"- **Audio files found:** {data['audio_count']}",
+        f"- **`.transcriptFC.txt` transcripts:** {data['transcript_count']}",
+        f"- **Locks found:** {data['lock_count']}",
         "",
-        "## Locks e execuções atuais",
+        "## Locks and current runs",
         "",
     ]
     if active_locks:
-        lines.append("| Máquina | Arquivo | Desde | Duração do áudio | Tempo decorrido |")
+        lines.append("| Machine | File | Since | Audio duration | Elapsed time |")
         lines.append("|---|---|---:|---:|---:|")
         for item in active_locks:
             lines.append(
@@ -359,19 +369,19 @@ def make_report(data: dict) -> str:
                 f"{format_elapsed_humanized(item['age_seconds'])} |"
             )
         lines.append("")
-        lines.append("Distribuição por máquina: " + ", ".join(f"`{machine}` ({count})" for machine, count in sorted(machines.items())) + ".")
+        lines.append("Distribution by machine: " + ", ".join(f"`{machine}` ({count})" for machine, count in sorted(machines.items())) + ".")
     else:
-        lines.append("Nenhum lock dentro da janela de 36h foi encontrado.")
+        lines.append("No lock within the 36h window was found.")
 
     lines += [
         "",
-        "## Métricas médias por máquina — últimas 12 horas",
+        "## Average metrics by machine — last 12 hours",
         "",
-        f"Considera transcripts com front matter modificados no Dropbox desde `{(recent_cutoff_utc.astimezone(report_tz)).strftime('%Y-%m-%d %H:%M:%S')}` até a consulta, com áudio de pelo menos 1 minuto. O horário de modificação do transcript é usado como aproximação de conclusão.",
+        f"Considers transcripts with front matter modified on Dropbox from `{(recent_cutoff_utc.astimezone(report_tz)).strftime('%Y-%m-%d %H:%M:%S')}` up to the query, with at least 1 minute of audio. The transcript's modification time is used as an approximation of completion.",
         "",
     ]
     if recent_by_machine:
-        lines.append("| Máquina | Arquivos | Áudio médio | Conversão média | RTF médio | Áudio/min conversão ponderado |")
+        lines.append("| Machine | Files | Average audio | Average conversion | Average RTF | Weighted audio-min/conversion-min |")
         lines.append("|---|---:|---:|---:|---:|---:|")
         for machine, items in sorted(recent_by_machine.items()):
             audio_total = sum(item["audio_duration_seconds"] for item in items)
@@ -384,89 +394,89 @@ def make_report(data: dict) -> str:
             lines.append(
                 f"| {md_cell(machine)} | {len(items)} | {format_seconds(avg_audio)} | "
                 f"{format_seconds(avg_conversion)} | "
-                f"{f'{avg_rtf:.3f}x' if avg_rtf is not None else 'n/d'} | "
-                f"{f'{throughput:.2f} min/min' if throughput is not None else 'n/d (conversão arredondada para 0s)'} |"
+                f"{f'{avg_rtf:.3f}x' if avg_rtf is not None else 'n/a'} | "
+                f"{f'{throughput:.2f} min/min' if throughput is not None else 'n/a (conversion rounded to 0s)'} |"
             )
     else:
-        lines.append("Nenhum transcript com front matter e áudio de pelo menos 1 minuto foi concluído nas últimas 12 horas.")
+        lines.append("No transcript with front matter and at least 1 minute of audio was completed in the last 12 hours.")
 
     lines += [
         "",
-        "## Resumo",
+        "## Summary",
         "",
-        f"- Com front matter: **{len(with_front)}**",
-        f"- Sem front matter: **{len(without_front)}**",
-        f"- Locks considerados ativos pela regra de 36h: **{len(active_locks)}**",
-        f"- Locks antigos ou sem data interpretável: **{len(stale_or_unparsed)}**",
+        f"- With front matter: **{len(with_front)}**",
+        f"- Without front matter: **{len(without_front)}**",
+        f"- Locks considered active by the 36h rule: **{len(active_locks)}**",
+        f"- Stale locks or locks without a parseable date: **{len(stale_or_unparsed)}**",
         "",
-        "## Métrica de conversão",
+        "## Conversion metric",
         "",
-        "Foram considerados para os cálculos somente os arquivos com **1 minuto ou mais de áudio**. Arquivos menores continuam listados, mas aparecem como `não calculado (<1 min)`. ",
+        "Only files with **1 minute or more of audio** were considered for the calculations. Smaller files remain listed, but appear as `not calculated (<1 min)`. ",
         "",
-        "O **RTF (real-time factor)** é `tempo de conversão ÷ duração do áudio`. Quanto menor, melhor: `0,10x` significa que converter 1 hora de áudio levou 6 minutos.",
+        "The **RTF (real-time factor)** is `conversion time ÷ audio duration`. Lower is better: `0.10x` means converting 1 hour of audio took 6 minutes.",
         "",
-        "**Áudio/min de conversão** é o inverso, `duração do áudio ÷ tempo de conversão`. Ele responde quantos minutos de áudio a máquina processou por cada minuto gasto na conversão. Por exemplo: `30 min/min` significa que 30 minutos de áudio foram convertidos em 1 minuto. Quanto maior, melhor.",
+        "**Audio-min/conversion-min** is the inverse, `audio duration ÷ conversion time`. It answers how many minutes of audio the machine processed for each minute spent on conversion. For example: `30 min/min` means 30 minutes of audio were converted in 1 minute. Higher is better.",
         "",
         "",
-        f"- Registros com duração e tempo de conversão válidos: **{len(valid_metrics)}**",
-        f"- Registros abaixo de 1 minuto, excluídos das métricas: **{len(below_threshold)}**",
-        f"- Áudio total considerado: **{format_seconds(total_audio)}**",
-        f"- Conversão total considerada: **{format_seconds(total_conversion)}**",
-        f"- RTF ponderado pelo total de áudio: **{weighted_rtf:.3f}x**" if weighted_rtf is not None else "- RTF ponderado: **n/d**",
-        f"- Áudio/min de conversão ponderado: **{1 / weighted_rtf:.2f} min/min**" if weighted_rtf else "- Áudio/min de conversão ponderado: **n/d**",
-        f"- RTF médio simples por arquivo: **{simple_mean_rtf:.3f}x**" if simple_mean_rtf is not None else "- RTF médio simples: **n/d**",
+        f"- Records with valid duration and conversion time: **{len(valid_metrics)}**",
+        f"- Records under 1 minute, excluded from the metrics: **{len(below_threshold)}**",
+        f"- Total audio considered: **{format_seconds(total_audio)}**",
+        f"- Total conversion considered: **{format_seconds(total_conversion)}**",
+        f"- RTF weighted by total audio: **{weighted_rtf:.3f}x**" if weighted_rtf is not None else "- Weighted RTF: **n/a**",
+        f"- Weighted audio-min/conversion-min: **{1 / weighted_rtf:.2f} min/min**" if weighted_rtf else "- Weighted audio-min/conversion-min: **n/a**",
+        f"- Simple average RTF per file: **{simple_mean_rtf:.3f}x**" if simple_mean_rtf is not None else "- Simple average RTF: **n/a**",
         "",
-        "## Todos os transcripts",
+        "## All transcripts",
         "",
-        "A coluna `Áudio/min de conversão` usa a unidade **minutos de áudio por minuto de conversão**. `não calculado (<1 min)` é intencional e segue o corte solicitado.",
+        "The `Audio-min/conversion-min` column uses the unit **minutes of audio per minute of conversion**. `not calculated (<1 min)` is intentional and follows the requested cutoff.",
         "",
-        "| Transcript | Front matter | Máquina registrada | Áudio | Conversão | RTF | Áudio/min de conversão |",
+        "| Transcript | Front matter | Recorded machine | Audio | Conversion | RTF | Audio-min/conversion-min |",
         "|---|---|---|---:|---:|---:|---:|",
     ]
     for item in transcripts:
         conversion_text, rtf_text, inverse = metric_text(item)
         lines.append(
-            f"| {md_cell(item['name'])} | {'sim' if item['has_front_matter'] else 'não'} | "
-            f"{md_cell(item['fields'].get('running_on', 'n/d'))} | {format_seconds(item['audio_duration_seconds'])} | "
+            f"| {md_cell(item['name'])} | {'yes' if item['has_front_matter'] else 'no'} | "
+            f"{md_cell(item['fields'].get('running_on', 'n/a'))} | {format_seconds(item['audio_duration_seconds'])} | "
             f"{conversion_text} | {rtf_text} | {inverse} |"
         )
     lines += [
         "",
-        "## Transcripts sem front matter — lista completa",
+        "## Transcripts without front matter — full list",
         "",
     ]
     if without_front:
         lines.extend(f"- `{md_cell(item['name'])}`" for item in without_front)
     else:
-        lines.append("Nenhum.")
+        lines.append("None.")
 
-    lines += ["", "## Transcripts com front matter — lista completa", ""]
+    lines += ["", "## Transcripts with front matter — full list", ""]
     if with_front:
         lines.extend(f"- `{md_cell(item['name'])}`" for item in with_front)
     else:
-        lines.append("Nenhum.")
+        lines.append("None.")
 
-    lines += ["", "## Locks antigos ou sem data interpretável", ""]
+    lines += ["", "## Stale locks or locks without a parseable date", ""]
     if stale_or_unparsed:
-        lines.append("| Arquivo | Máquina | Início | Idade | Conteúdo |")
+        lines.append("| File | Machine | Started | Age | Content |")
         lines.append("|---|---|---:|---:|---|")
         for item in stale_or_unparsed:
             lines.append(
                 f"| {md_cell(item['name'])} | {md_cell(item['machine'])} | "
-                f"{md_cell(item['started_at'] or 'n/d')} | {format_seconds(item['age_seconds'])} | "
+                f"{md_cell(item['started_at'] or 'n/a')} | {format_seconds(item['age_seconds'])} | "
                 f"{md_cell(item['content'])} |"
             )
     else:
-        lines.append("Nenhum.")
+        lines.append("None.")
     lines += [
         "",
-        "## Critério",
+        "## Criteria",
         "",
-        "- Front matter foi considerado presente quando o arquivo começa com um bloco delimitado por `---` e `---`.",
-        "- Um lock foi considerado execução atual quando contém `Iniciado em:` interpretável e tem no máximo 36 horas, mesma regra documentada no pipeline do projeto.",
-        "- Como o pipeline grava o início sem fuso, o relatório infere o fuso comparando `Iniciado em` com `server_modified` do Dropbox; o tempo decorrido é calculado em UTC.",
-        "- Métricas individuais e agregadas excluem arquivos com duração inferior a 1 minuto; esses arquivos continuam visíveis na tabela completa.",
-        "- A consulta foi somente leitura; nenhum arquivo remoto foi criado, atualizado ou removido.",
+        "- Front matter was considered present when the file starts with a block delimited by `---` and `---`.",
+        "- A lock was considered a current run when it contains a parseable `Started at:` and is at most 36 hours old, the same rule documented in the project's pipeline.",
+        "- Since the pipeline records the start time without an offset, the report infers the timezone by comparing `Started at` with Dropbox's `server_modified`; the elapsed time is computed in UTC.",
+        "- Individual and aggregate metrics exclude files with less than 1 minute of duration; these files remain visible in the full table.",
+        "- The query was read-only; no remote file was created, updated, or removed.",
         "",
     ]
     return "\n".join(lines)
@@ -474,7 +484,7 @@ def make_report(data: dict) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("root", help="Caminho absoluto da pasta no Dropbox")
+    parser.add_argument("root", help="Absolute path of the Dropbox folder")
     parser.add_argument("--env", default=".env")
     parser.add_argument("--output", default=None)
     args = parser.parse_args(argv)
@@ -488,7 +498,7 @@ def main(argv: list[str] | None = None) -> int:
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(report, encoding="utf-8")
     print(report)
-    print(f"\nRelatório salvo em: {output.resolve()}")
+    print(f"\nReport saved to: {output.resolve()}")
     return 0
 
 

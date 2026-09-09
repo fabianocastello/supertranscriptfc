@@ -1,80 +1,80 @@
 @echo off
-REM Instalador do VOXEL FC para Windows usando so' cmd.exe puro,
-REM sem chamar PowerShell em nenhum momento. Para maquinas antigas ou com
-REM politica de execucao de scripts PowerShell restrita/bloqueada.
+REM VOXEL FC installer for Windows using plain cmd.exe only,
+REM never invoking PowerShell. For older machines or ones with a
+REM restricted/blocked PowerShell script execution policy.
 setlocal enabledelayedexpansion
 
 set "REPO_DIR=%~dp0.."
 cd /d "%REPO_DIR%"
 
-echo == VOXEL FC: instalacao (Windows, cmd puro) ==
+echo == VOXEL FC: installation (Windows, plain cmd) ==
 
-REM --- 1. Verificar Python ---
+REM --- 1. Check Python ---
 where python >nul 2>&1
 if errorlevel 1 (
-    echo Python nao encontrado no PATH.
-    echo Instale com: winget install Python.Python.3.12
-    echo Depois, em Configuracoes ^> Aplicativos ^> Configuracoes avancadas do
-    echo aplicativo ^> Aliases de execucao do aplicativo, desligue python.exe
-    echo e python3.exe caso o Windows abra a Microsoft Store em vez do Python.
+    echo Python not found in PATH.
+    echo Install with: winget install Python.Python.3.12
+    echo Then, in Settings ^> Apps ^> Advanced app settings ^>
+    echo App execution aliases, turn off python.exe and python3.exe
+    echo in case Windows opens the Microsoft Store instead of Python.
     goto :fail
 )
 
-REM --- 2. Verificar FFmpeg ---
+REM --- 2. Check FFmpeg ---
 where ffmpeg >nul 2>&1
 if errorlevel 1 (
-    echo FFmpeg nao encontrado no PATH.
-    echo Instale com: winget install Gyan.FFmpeg
+    echo FFmpeg not found in PATH.
+    echo Install with: winget install Gyan.FFmpeg
     goto :fail
 )
 
-REM --- 3. Criar venv ---
+REM --- 3. Create venv ---
 if not exist ".venv\Scripts\activate.bat" (
-    echo Criando ambiente virtual em .venv ...
+    echo Creating virtual environment in .venv ...
     python -m venv .venv
     if errorlevel 1 goto :fail
 )
 call ".venv\Scripts\activate.bat"
 python -m pip install --upgrade pip -q
 
-REM --- 4. Detectar GPU NVIDIA (CUDA) ---
+REM --- 4. Detect NVIDIA GPU (CUDA) ---
 set "EXTRAS=dropbox,transcribe,diarize"
 where nvidia-smi >nul 2>&1
 if errorlevel 1 (
-    echo Nenhuma GPU NVIDIA detectada: instalando torch/torchaudio CPU-only.
+    echo No NVIDIA GPU detected: installing CPU-only torch/torchaudio.
     pip install -q --index-url https://download.pytorch.org/whl/cpu torch torchaudio
 ) else (
     nvidia-smi >nul 2>&1
     if errorlevel 1 (
-        echo Nenhuma GPU NVIDIA detectada: instalando torch/torchaudio CPU-only.
+        echo No NVIDIA GPU detected: installing CPU-only torch/torchaudio.
         pip install -q --index-url https://download.pytorch.org/whl/cpu torch torchaudio
     ) else (
-        echo GPU NVIDIA detectada: instalando com suporte a CUDA.
+        echo NVIDIA GPU detected: installing with CUDA support.
         set "EXTRAS=%EXTRAS%,cuda"
     )
 )
 
-echo Instalando o pacote (extras: %EXTRAS%) ...
+echo Installing the package (extras: %EXTRAS%) ...
 pip install -q -e ".[%EXTRAS%]"
 if errorlevel 1 goto :fail
 
-REM --- 5. Criar .env a partir do exemplo, se necessario ---
+REM --- 5. Create .env from the example, if needed ---
 if not exist ".env" (
     copy /y ".env.example" ".env" >nul
-    echo Arquivo .env criado a partir de .env.example. Preencha DROPBOX_APP_KEY, DROPBOX_APP_SECRET, DROPBOX_REFRESH_TOKEN e HF_TOKEN.
+    echo Created .env from .env.example. Fill in DROPBOX_APP_KEY, DROPBOX_APP_SECRET, DROPBOX_REFRESH_TOKEN, and HF_TOKEN.
 )
 
 echo.
-echo Instalacao concluida nesta maquina.
-echo Modelos e cache ficarao em: %USERPROFILE%\.voxelfc\models
-echo Para usar:
+echo Installation complete on this machine.
+echo Models and cache will live in: %USERPROFILE%\.voxelfc\models
+echo To use it:
 echo   .venv\Scripts\activate.bat
-echo   voxelfc --source C:\caminho\audio.mp3 --local
+echo   voxelfc --source C:\path\to\audio.mp3 --local
 pause
 exit /b 0
 
 :fail
 echo.
-echo A instalacao falhou. Veja as mensagens acima.
+echo Installation failed. See the messages above.
 pause
 exit /b 1

@@ -1,14 +1,14 @@
 @echo off
-REM Atualiza o codigo (git pull) e ja roda o voxelfc com os
-REM argumentos passados, para nao esquecer de atualizar antes de cada uso.
+REM Updates the code (git pull) and runs voxelfc with the given
+REM arguments, so it's never forgotten before each use.
 REM
-REM Uso: scripts\update.bat --source C:\caminho\ou\pasta --model-size large-v3 --language pt
+REM Usage: scripts\update.bat --source C:\path\or\folder --model-size large-v3 --language pt
 setlocal
 
 set "REPO_DIR=%~dp0.."
 cd /d "%REPO_DIR%"
 
-echo == Atualizando codigo (git pull) ==
+echo == Updating code (git pull) ==
 git pull
 if errorlevel 1 goto :fail
 
@@ -16,23 +16,23 @@ if exist ".venv\Scripts\activate.bat" (
     call ".venv\Scripts\activate.bat"
 )
 
-REM O pull pode alterar pyproject.toml, o nome do pacote ou os entry points.
-REM Reinstalar o pacote atualiza voxelfc.exe e o alias legado.
-echo == Instalando codigo atualizado no ambiente virtual ==
+REM The pull may change pyproject.toml, the package name, or the entry
+REM points. Reinstalling the package updates voxelfc.exe and the legacy alias.
+echo == Installing the updated code into the virtual environment ==
 python -m pip install -q -e .
 if errorlevel 1 goto :fail
 
 where voxelfc >nul 2>&1
 if errorlevel 1 (
-    echo Executavel voxelfc nao encontrado apos a instalacao.
+    echo voxelfc executable not found after installation.
     goto :fail
 )
 
-echo == Rodando: voxelfc %* ==
+echo == Running: voxelfc %* ==
 voxelfc %*
 exit /b %ERRORLEVEL%
 
 :fail
 echo.
-echo Falha ao atualizar o codigo (git pull). Veja as mensagens acima.
+echo Failed to update the code (git pull). See the messages above.
 exit /b 1

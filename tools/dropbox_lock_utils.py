@@ -52,7 +52,7 @@ def connect_from_env(env_path: Path | None = None):
     required = ("DROPBOX_APP_KEY", "DROPBOX_APP_SECRET", "DROPBOX_REFRESH_TOKEN")
     missing = [key for key in required if not values.get(key)]
     if missing:
-        raise RuntimeError(f"Variáveis ausentes em {env_path}: {', '.join(missing)}")
+        raise RuntimeError(f"Missing variables in {env_path}: {', '.join(missing)}")
     return dropbox.Dropbox(
         oauth2_refresh_token=values["DROPBOX_REFRESH_TOKEN"],
         app_key=values["DROPBOX_APP_KEY"],
@@ -64,7 +64,7 @@ def list_files(dbx, root: str):
     from dropbox.files import FileMetadata
 
     if not root.startswith("/"):
-        raise ValueError("O caminho do Dropbox precisa começar com '/'.")
+        raise ValueError("The Dropbox path must start with '/'.")
     result = dbx.files_list_folder(root.rstrip("/") or "/", recursive=True)
     entries = list(result.entries)
     while result.has_more:
@@ -84,15 +84,19 @@ def relative_name(path: str, root: str) -> str:
 
 
 def parse_lock(content: str) -> tuple[str, str | None]:
-    machine = "desconhecida"
+    # NOTE: these field labels ("Processing on" / "Started at") match the
+    # lock file content format written by the pipeline at the time this tool
+    # was updated. If the pipeline's lock format changes, this parser must
+    # be updated to match, or it will silently stop finding these fields.
+    machine = "unknown"
     started = None
     for line in content.splitlines():
         if ":" not in line:
             continue
         key, value = line.split(":", 1)
-        if key.strip() == "Processando por":
+        if key.strip() == "Processing on":
             machine = value.strip() or machine
-        elif key.strip() == "Iniciado em":
+        elif key.strip() == "Started at":
             started = value.strip() or None
     return machine, started
 
@@ -122,13 +126,16 @@ def transcript_audio_duration(dbx, transcript_path: str) -> float | None:
         if ":" not in line:
             continue
         key, value = line.split(":", 1)
-        if key.strip() == "duracao_audio":
+        # NOTE: "audio_duration" matches the front-matter field name in use
+        # when this tool was updated; if the pipeline's front-matter field
+        # names change, this lookup must be updated to match.
+        if key.strip() == "audio_duration":
             return parse_duration(value.strip().strip('"'))
     return None
 
 
 def probe_remote_audio_duration(dbx, audio_path: str) -> float | None:
-    """Baixa temporariamente um áudio e obtém a duração com ffprobe."""
+    """Temporarily downloads an audio file and gets its duration with ffprobe."""
     try:
         _metadata, response = dbx.files_download(audio_path)
         suffix = PurePosixPath(audio_path).suffix or ".audio"
@@ -152,11 +159,12 @@ def probe_remote_audio_duration(dbx, audio_path: str) -> float | None:
 
 
 def normalize_lock_start(started_at: datetime, server_modified: datetime) -> datetime:
-    """Normaliza o início para UTC.
+    """Normalizes the start time to UTC.
 
-    O pipeline original grava datetime.now().isoformat() sem offset. O SDK do
-    Dropbox expõe server_modified como UTC sem tzinfo; usamos essa diferença
-    para inferir o offset da máquina, como no relatório principal.
+    The original pipeline records datetime.now().isoformat() without an
+    offset. The Dropbox SDK exposes server_modified as UTC without tzinfo;
+    we use that difference to infer the machine's offset, same as in the
+    main report.
     """
     if started_at.tzinfo is not None:
         return started_at.astimezone(timezone.utc)
@@ -225,7 +233,7 @@ def parse_age(value: str) -> int:
     match = VALID_AGE_RE.fullmatch(value)
     if not match:
         raise ValueError(
-            f"Duração inválida: {value!r}. Use exatamente formatos como 1h, 10m ou 30s, sem espaços."
+            f"Invalid duration: {value!r}. Use exactly formats like 1h, 10m, or 30s, with no spaces."
         )
     amount = int(match.group("amount"))
     unit = match.group("unit")
@@ -235,29 +243,29 @@ def parse_age(value: str) -> int:
 
 def format_elapsed(seconds: float | None) -> str:
     if seconds is None:
-        return "tempo desconhecido"
+        return "unknown time"
     total = max(0, int(round(seconds)))
     if total < 10:
-        return "há alguns segundos"
+        return "a few seconds ago"
     hours, remainder = divmod(total, 3600)
     minutes, secs = divmod(remainder, 60)
     parts: list[str] = []
     if hours:
-        parts.append(f"{hours} hora" if hours == 1 else f"{hours} horas")
+        parts.append(f"{hours} hour" if hours == 1 else f"{hours} hours")
     if minutes:
-        parts.append(f"{minutes} minuto" if minutes == 1 else f"{minutes} minutos")
+        parts.append(f"{minutes} minute" if minutes == 1 else f"{minutes} minutes")
     if not hours and not minutes:
-        parts.append(f"{secs} segundo" if secs == 1 else f"{secs} segundos")
+        parts.append(f"{secs} second" if secs == 1 else f"{secs} seconds")
     elif secs >= 30:
-        parts.append(f"{secs} segundo" if secs == 1 else f"{secs} segundos")
+        parts.append(f"{secs} second" if secs == 1 else f"{secs} seconds")
     if len(parts) == 1:
-        return "há " + parts[0]
-    return "há " + ", ".join(parts[:-1]) + " e " + parts[-1]
+        return parts[0] + " ago"
+    return ", ".join(parts[:-1]) + " and " + parts[-1] + " ago"
 
 
 def format_seconds(seconds: float | None) -> str:
     if seconds is None:
-        return "n/d"
+        return "n/a"
     total = max(0, int(round(seconds)))
     hours, remainder = divmod(total, 3600)
     minutes, secs = divmod(remainder, 60)
@@ -283,7 +291,7 @@ def format_age_limit(seconds: int) -> str:
 
 def display_start(lock: LockRecord, report_tz: timezone) -> str:
     if lock.started_utc is None:
-        return "n/d"
+        return "n/a"
     return lock.started_utc.astimezone(report_tz).strftime("%Y-%m-%d %H:%M:%S")
 
 

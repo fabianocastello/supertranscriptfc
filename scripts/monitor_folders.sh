@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
-# Monitora varias pastas do Dropbox na mesma maquina, chamando
-# voxelfc para cada uma em sequencia. E' seguro reiniciar do zero
-# a qualquer momento (apos um crash, por exemplo): cada arquivo so' e'
-# considerado concluido com base na existencia real do .transcriptFC.txt no
-# proprio Dropbox, entao pastas/arquivos ja prontos sao pulados rapido em
-# vez de reprocessados.
+# Monitors several Dropbox folders on the same machine, calling
+# voxelfc for each one in sequence. It's safe to restart from scratch
+# at any time (after a crash, for example): each file is only considered
+# complete based on the real existence of .transcriptFC.txt on Dropbox
+# itself, so folders/files that are already done are skipped quickly
+# instead of being reprocessed.
 #
-# Configuracao: liste as pastas em scripts/folders.txt (uma por linha,
-# comecando com "/"; linhas em branco ou com "#" sao ignoradas). Copie
-# scripts/folders.txt.example para comecar.
+# Configuration: list the folders in scripts/folders.txt (one per line,
+# starting with "/"; blank lines or lines starting with "#" are ignored).
+# Copy scripts/folders.txt.example to get started.
 #
-# Uso:
-#   scripts/monitor_folders.sh [--loop SEGUNDOS] [-- <args extras>]
+# Usage:
+#   scripts/monitor_folders.sh [--loop SECONDS] [-- <extra args>]
 #
-# Exemplos:
+# Examples:
 #   scripts/monitor_folders.sh -- --model-size large-v3 --language pt --vtt
 #   scripts/monitor_folders.sh --loop 1800 -- --model-size large-v3 --vtt
 set -uo pipefail
@@ -28,8 +28,8 @@ if [ -f ".venv/bin/activate" ]; then
 fi
 
 if [ ! -f "$FOLDERS_FILE" ]; then
-    echo "Arquivo de pastas nao encontrado: $FOLDERS_FILE" >&2
-    echo "Copie scripts/folders.txt.example para $FOLDERS_FILE e edite com suas pastas do Dropbox." >&2
+    echo "Folders file not found: $FOLDERS_FILE" >&2
+    echo "Copy scripts/folders.txt.example to $FOLDERS_FILE and edit it with your Dropbox folders." >&2
     exit 1
 fi
 
@@ -48,7 +48,7 @@ while [ $# -gt 0 ]; do
             break
             ;;
         *)
-            echo "Argumento desconhecido: $1" >&2
+            echo "Unknown argument: $1" >&2
             exit 1
             ;;
     esac
@@ -64,24 +64,24 @@ run_one_pass() {
 
         total=$((total + 1))
         echo ""
-        echo "=== [$total] Pasta: $line ==="
+        echo "=== [$total] Folder: $line ==="
         if voxelfc --source "$line" "${EXTRA_ARGS[@]}"; then
             ok=$((ok + 1))
         else
             fail=$((fail + 1))
-            echo "AVISO: falha ao processar a pasta '$line', continuando com as demais." >&2
+            echo "WARNING: failed to process folder '$line', continuing with the rest." >&2
         fi
     done < "$FOLDERS_FILE"
 
     echo ""
-    echo "=== Passada concluida: $ok/$total pastas OK, $fail com falha ==="
+    echo "=== Pass complete: $ok/$total folders OK, $fail failed ==="
 }
 
 if [ -n "$LOOP_INTERVAL" ]; then
-    echo "Monitorando em loop, a cada ${LOOP_INTERVAL}s (Ctrl+C para parar)."
+    echo "Monitoring in a loop, every ${LOOP_INTERVAL}s (Ctrl+C to stop)."
     while true; do
         run_one_pass
-        echo "Aguardando ${LOOP_INTERVAL}s ate a proxima passada..."
+        echo "Waiting ${LOOP_INTERVAL}s until the next pass..."
         sleep "$LOOP_INTERVAL"
     done
 else

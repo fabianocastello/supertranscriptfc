@@ -1,13 +1,14 @@
 @echo off
-REM Instalador do VOXEL FC para Windows (ex: ps20).
-REM So' um wrapper fino que chama install.ps1 via PowerShell contornando a
-REM politica de execucao padrao (que costuma bloquear scripts .ps1), para
-REM quem preferir dar duplo-clique em vez de abrir o PowerShell manualmente.
+REM VOXEL FC installer for Windows (e.g. ps20).
+REM This is just a thin wrapper that calls install.ps1 via PowerShell,
+REM bypassing the default execution policy (which usually blocks .ps1
+REM scripts), for anyone who'd rather double-click than open PowerShell
+REM manually.
 
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0install.ps1"
 if %ERRORLEVEL% NEQ 0 (
     echo.
-    echo A instalacao falhou. Veja as mensagens acima.
+    echo Installation failed. See the messages above.
     pause
     exit /b %ERRORLEVEL%
 )

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Instalador do VOXEL FC para Linux (thor25, leno18) e macOS (MacBook Air M1).
-# Cada maquina roda de forma totalmente independente: venv proprio, modelos
-# proprios em ~/.voxelfc/models. Nada e' compartilhado pela rede.
+# VOXEL FC installer for Linux (thor25, leno18) and macOS (MacBook Air M1).
+# Each machine runs fully independently: its own venv, its own models in
+# ~/.voxelfc/models. Nothing is shared over the network.
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -9,65 +9,65 @@ cd "$REPO_DIR"
 
 OS="$(uname -s)"
 
-echo "== VOXEL FC: instalacao (${OS}) =="
+echo "== VOXEL FC: installation (${OS}) =="
 
-# --- 1. Verificar Python 3.10+ ---
+# --- 1. Check Python 3.10+ ---
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
-    echo "Python3 nao encontrado no PATH. Instale o Python 3.10+ antes de continuar." >&2
+    echo "Python3 not found in PATH. Install Python 3.10+ before continuing." >&2
     exit 1
 fi
 
-# --- 2. Verificar FFmpeg ---
+# --- 2. Check FFmpeg ---
 if ! command -v ffmpeg >/dev/null 2>&1; then
-    echo "FFmpeg nao encontrado."
+    echo "FFmpeg not found."
     if [ "$OS" = "Darwin" ]; then
-        echo "Instale com: brew install ffmpeg"
+        echo "Install with: brew install ffmpeg"
     else
-        echo "Instale com: sudo apt install ffmpeg   (ou o gerenciador de pacotes da sua distro)"
+        echo "Install with: sudo apt install ffmpeg   (or your distro's package manager)"
     fi
     exit 1
 fi
 
-# --- 3. Criar venv ---
+# --- 3. Create venv ---
 if [ ! -d ".venv" ]; then
-    echo "Criando ambiente virtual em .venv ..."
+    echo "Creating virtual environment in .venv ..."
     "$PYTHON_BIN" -m venv .venv
 fi
 # shellcheck disable=SC1091
 source .venv/bin/activate
 pip install --upgrade pip -q
 
-# --- 4. Detectar GPU NVIDIA (CUDA) ---
-# So' relevante em Linux/Windows: no macOS o torch do PyPI ja' vem sem CUDA
-# (roda em CPU, com aceleracao MPS onde suportado) e o indice /whl/cpu nao
-# publica wheels para macOS/arm64.
+# --- 4. Detect NVIDIA GPU (CUDA) ---
+# Only relevant on Linux/Windows: on macOS, torch from PyPI already ships
+# without CUDA (runs on CPU, with MPS acceleration where supported) and the
+# /whl/cpu index doesn't publish wheels for macOS/arm64.
 EXTRAS="dropbox,transcribe,diarize"
 if [ "$OS" = "Darwin" ]; then
-    echo "macOS detectado: torch ja' roda em CPU/MPS sem necessidade de indice especial."
+    echo "macOS detected: torch already runs on CPU/MPS, no special index needed."
 elif command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi >/dev/null 2>&1; then
-    echo "GPU NVIDIA detectada: instalando com suporte a CUDA."
+    echo "NVIDIA GPU detected: installing with CUDA support."
     EXTRAS="${EXTRAS},cuda"
 else
-    echo "Nenhuma GPU NVIDIA detectada: instalando torch/torchaudio CPU-only (menor download)."
-    # torchaudio (dependencia do pyannote.audio) tambem precisa vir da variante
-    # CPU: o wheel padrao do PyPI carrega uma extensao nativa vinculada a
-    # libcudart, que falha ao importar em maquinas sem CUDA instalado.
+    echo "No NVIDIA GPU detected: installing CPU-only torch/torchaudio (smaller download)."
+    # torchaudio (a pyannote.audio dependency) also needs to come from the CPU
+    # variant: the default PyPI wheel loads a native extension linked against
+    # libcudart, which fails to import on machines without CUDA installed.
     pip install -q --index-url https://download.pytorch.org/whl/cpu torch torchaudio || true
 fi
 
-echo "Instalando o pacote (extras: ${EXTRAS}) ..."
+echo "Installing the package (extras: ${EXTRAS}) ..."
 pip install -q -e ".[${EXTRAS}]"
 
-# --- 5. Criar .env a partir do exemplo, se necessario ---
+# --- 5. Create .env from the example, if needed ---
 if [ ! -f ".env" ]; then
     cp .env.example .env
-    echo "Arquivo .env criado a partir de .env.example. Preencha DROPBOX_APP_KEY, DROPBOX_APP_SECRET, DROPBOX_REFRESH_TOKEN e HF_TOKEN."
+    echo "Created .env from .env.example. Fill in DROPBOX_APP_KEY, DROPBOX_APP_SECRET, DROPBOX_REFRESH_TOKEN, and HF_TOKEN."
 fi
 
 echo ""
-echo "Instalacao concluida nesta maquina."
-echo "Modelos e cache ficarao em: ~/.voxelfc/models"
-echo "Para usar:"
+echo "Installation complete on this machine."
+echo "Models and cache will live in: ~/.voxelfc/models"
+echo "To use it:"
 echo "  source .venv/bin/activate"
-echo "  voxelfc --source /caminho/audio.mp3 --local"
+echo "  voxelfc --source /path/to/audio.mp3 --local"

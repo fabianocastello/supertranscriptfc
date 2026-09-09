@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Consulta rápida dos locks de uma pasta Dropbox.
+"""Quick status check of the locks in a Dropbox folder.
 
-Uso:
+Usage:
     python ./tools/status.py /_AudioMemosFC/MamyCalls
 
-A consulta usa o .env na raiz do projeto, lista os locks remotos e não altera
-nenhum arquivo do Dropbox.
+The query uses the .env at the project root, lists the remote locks, and
+does not modify any file on Dropbox.
 """
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ from dropbox_lock_utils import (  # noqa: E402
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("root", help="Caminho absoluto da pasta no Dropbox")
+    parser.add_argument("root", help="Absolute path of the Dropbox folder")
     args = parser.parse_args()
 
     try:
@@ -41,15 +41,15 @@ def main() -> int:
         audio_count, transcript_count = summarize_entries(entries)
         locks = collect_locks(dbx, args.root, entries, now=now, include_audio_duration=True)
     except Exception as exc:
-        print(f"Erro ao consultar o Dropbox: {exc}", file=sys.stderr)
+        print(f"Error querying Dropbox: {exc}", file=sys.stderr)
         return 1
 
-    print(f"Pasta Dropbox: {args.root}")
-    print(f"Consulta realizada em: {now.isoformat(timespec='seconds')}")
-    print(f"Áudios encontrados: {audio_count}")
+    print(f"Dropbox folder: {args.root}")
+    print(f"Query performed at: {now.isoformat(timespec='seconds')}")
+    print(f"Audio files found: {audio_count}")
     print(f"Transcripts .transcriptFC.txt: {transcript_count}")
-    print(f"Locks encontrados: {len(locks)}")
-    print("\nLocks e execuções atuais")
+    print(f"Locks found: {len(locks)}")
+    print("\nLocks and current runs")
 
     if locks:
         rows = [
@@ -62,7 +62,7 @@ def main() -> int:
             ]
             for lock in locks
         ]
-        headers = ["Máquina", "Arquivo", "Desde", "Duração do áudio", "Tempo decorrido"]
+        headers = ["Machine", "File", "Since", "Audio duration", "Elapsed time"]
         widths = [
             max(len(headers[index]), *(len(row[index]) for row in rows))
             for index in range(len(headers))
@@ -79,18 +79,18 @@ def main() -> int:
             print("  ".join(row[index].ljust(widths[index]) for index in range(len(row))))
         distribution = Counter(lock.machine for lock in locks)
         print(
-            "\nDistribuição por máquina: "
+            "\nDistribution by machine: "
             + ", ".join(f"{md_cell(machine)} ({count})" for machine, count in sorted(distribution.items()))
             + "."
         )
     else:
-        print("Nenhum lock encontrado.")
+        print("No lock found.")
 
     stale = [lock for lock in locks if not lock.is_active]
     if stale:
         print(
-            f"\nAtenção: {len(stale)} lock(s) estão fora da janela de 36h ou têm tempo desconhecido. "
-            "Use remove_locks somente após confirmar que não há processo executando."
+            f"\nWarning: {len(stale)} lock(s) are outside the 36h window or have an unknown age. "
+            "Use remove_locks only after confirming that no process is running."
         )
     return 0
 

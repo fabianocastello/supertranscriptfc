@@ -17,9 +17,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--source",
-        required=True,
+        default=None,
         help="Path to the source file OR folder (local or Dropbox). If a folder, "
-        "processes every audio file in it.",
+        "processes every audio file in it. Mutually exclusive with --source-list.",
+    )
+    parser.add_argument(
+        "--source-list",
+        default=None,
+        help="Path to a local text file listing multiple source folders, one per "
+        "line (blank lines and lines starting with '#' are ignored). Each line "
+        "starting with '/' is treated as a Dropbox folder; any other line is a "
+        "local folder. Every source is processed independently, in its own "
+        "environment - --local is ignored in this mode. Mutually exclusive "
+        "with --source.",
     )
     parser.add_argument(
         "--dest",
@@ -30,7 +40,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--archive",
         default=None,
         help="If processing finishes OK, move (not copy) the original audio and the "
-        "generated outputs into this folder (local or Dropbox, per --local).",
+        "generated outputs into this folder (local or Dropbox, per --local). With "
+        "--source-list, this is a base name reused per source: each source's "
+        "outputs move into <archive>/<source folder name>, in that source's own "
+        "environment (local source archives locally, Dropbox source archives on "
+        "Dropbox), so a mix of local and Dropbox sources can share one --archive "
+        "value.",
     )
     parser.add_argument(
         "--local",
@@ -82,6 +97,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
+    if not args.source and not args.source_list:
+        parser.error("one of --source or --source-list is required")
+    if args.source and args.source_list:
+        parser.error("--source and --source-list are mutually exclusive")
+
     config = Config(
         model_size=args.model_size,
         device=args.device,
@@ -108,6 +128,17 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
+        if args.source_list:
+            get_dropbox_client = _make_dropbox_client_factory(config, logger)
+            return _run_source_list(
+                config,
+                logger,
+                Path(args.source_list),
+                args.dest,
+                args.archive,
+                args.recursive,
+                get_dropbox_client,
+            )
         if args.local:
             dest_dir = Path(args.dest) if args.dest else None
             archive_dir = Path(args.archive) if args.archive else None
@@ -168,7 +199,7 @@ def main(argv: list[str] | None = None) -> int:
                     )
         return 0
     except Exception:
-        logger.exception("Failed to process %s", args.source)
+        logger.exception("Failed to process %s", args.source or args.source_list)
         return 1
 
 
@@ -181,6 +212,129 @@ def _log_batch_summary(logger, summary: dict[str, list]) -> None:
     )
     if summary["failed"]:
         logger.warning("Files with failures: %s", summary["failed"])
+
+
+def _make_dropbox_client_factory(config: Config, logger):
+    """Lazily builds (and caches) a DropboxClient, only if/when a source in
+    the list actually needs one - a source list of purely local folders
+    never requires Dropbox credentials."""
+    cache: dict = {}
+
+    def get():
+        if "client" not in cache:
+            if not config.has_dropbox_credentials:
+                logger.error(
+                    "DROPBOX_APP_KEY / DROPBOX_APP_SECRET / DROPBOX_REFRESH_TOKEN "
+                    "not configured (see .env.example)."
+                )
+                cache["client"] = None
+            else:
+                from .dropbox_client import DropboxClient
+
+                cache["client"] = DropboxClient(
+                    config.dropbox_app_key, config.dropbox_app_secret, config.dropbox_refresh_token
+                )
+        return cache["client"]
+
+    return get
+
+
+def _read_source_list(list_path: Path) -> list[str]:
+    lines = []
+    for raw in list_path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if len(line) >= 2 and line[0] == line[-1] and line[0] in "\"'":
+            line = line[1:-1].strip()
+        if line:
+            lines.append(line)
+    return lines
+
+
+def _is_dropbox_entry(entry: str) -> bool:
+    """A leading '/' alone doesn't disambiguate Dropbox from a local
+    absolute path (e.g. /home/user/audio) - so an absolute path that
+    actually exists on this machine's filesystem is treated as local;
+    everything else starting with '/' is assumed to be a Dropbox path."""
+    return entry.startswith("/") and not Path(entry).exists()
+
+
+def _archive_target(archive: str, basename: str, is_dropbox: bool) -> str | Path:
+    """--archive is always relative to its own source's environment: a local
+    source archives into a local folder, a Dropbox source archives into a
+    Dropbox folder, both named <archive>/<basename> - so a single --archive
+    value like './_ready' works for a mix of local and Dropbox sources in
+    the same --source-list run."""
+    if is_dropbox:
+        root = archive.strip()
+        if root.startswith("./"):
+            root = root[2:]
+        root = "/" + root.lstrip("/")
+        root = root.rstrip("/")
+        return f"{root}/{basename}" if root else f"/{basename}"
+    return Path(archive) / basename
+
+
+def _run_source_list(
+    config: Config,
+    logger,
+    list_path: Path,
+    dest: str | None,
+    archive: str | None,
+    recursive: bool,
+    get_dropbox_client,
+) -> int:
+    if not list_path.is_file():
+        logger.error("Source list file not found: %s", list_path)
+        return 1
+
+    sources = _read_source_list(list_path)
+    if not sources:
+        logger.error("Source list %s is empty (or only has comments).", list_path)
+        return 1
+
+    logger.info("Source list %s: %d entries to process.", list_path, len(sources))
+    any_failed = False
+    for i, entry in enumerate(sources, start=1):
+        is_dropbox = _is_dropbox_entry(entry)
+        basename = entry.rstrip("/").rsplit("/", 1)[-1]
+        this_archive = _archive_target(archive, basename, is_dropbox) if archive else None
+        logger.info(
+            "=== Source %d/%d: %s (%s) ===", i, len(sources), entry, "Dropbox" if is_dropbox else "local"
+        )
+        try:
+            if is_dropbox:
+                client = get_dropbox_client()
+                if client is None:
+                    any_failed = True
+                    continue
+                if client.is_folder(entry):
+                    summary = run_dropbox_batch(
+                        config, client, entry, dest, recursive=recursive, archive_folder=this_archive
+                    )
+                    _log_batch_summary(logger, summary)
+                    any_failed = any_failed or bool(summary["failed"])
+                else:
+                    outputs = run_dropbox_job(config, client, entry, dest, archive_folder=this_archive)
+                    logger.info("Done: %s -> %s", entry, outputs or "nothing to do")
+            else:
+                source_path = Path(entry)
+                dest_dir = Path(dest) if dest else None
+                if source_path.is_dir():
+                    summary = run_local_batch(
+                        config, source_path, dest_dir, recursive=recursive, archive_dir=this_archive
+                    )
+                    _log_batch_summary(logger, summary)
+                    any_failed = any_failed or bool(summary["failed"])
+                else:
+                    outputs = run_local_job(config, source_path, dest_dir, archive_dir=this_archive)
+                    logger.info("Done: %s -> %s", entry, [str(p) for p in outputs] if outputs else "nothing to do")
+        except Exception:
+            logger.exception("Failed to process source %s, continuing with the rest.", entry)
+            any_failed = True
+
+    return 1 if any_failed else 0
 
 
 if __name__ == "__main__":

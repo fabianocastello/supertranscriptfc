@@ -214,6 +214,7 @@ def process_file(
 
     if not state.is_done("converted"):
         stage_start = time.monotonic()
+        logger.info("[%s] Converting audio to WAV...", job_id)
         convert_to_wav(input_path, wav_path)
         state.mark_done("converted", converted_seconds=time.monotonic() - stage_start)
     else:

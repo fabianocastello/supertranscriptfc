@@ -128,8 +128,12 @@ def _transcribe_with_mlx(
     logger.info("Transcribing with mlx-whisper (model=%s, device=Apple GPU/Neural Engine)", model_repo)
     model_path = _resolve_mlx_model_path(model_repo)
 
+    # verbose=True prints each decoded segment to the console as it happens -
+    # mlx_whisper.transcribe() otherwise blocks silently until the whole
+    # file is done, with no progress feedback like faster-whisper's
+    # segment-by-segment ProgressPrinter.
     detect_result = mlx_whisper.transcribe(
-        str(wav_path), path_or_hf_repo=model_path, language=None, task="transcribe"
+        str(wav_path), path_or_hf_repo=model_path, language=None, task="transcribe", verbose=True
     )
     detected_language = detect_result.get("language")
     # mlx_whisper doesn't expose a detection confidence the way
@@ -147,7 +151,11 @@ def _transcribe_with_mlx(
             detect_result
             if language == detected_language
             else mlx_whisper.transcribe(
-                str(wav_path), path_or_hf_repo=model_path, language=language, task="transcribe"
+                str(wav_path),
+                path_or_hf_repo=model_path,
+                language=language,
+                task="transcribe",
+                verbose=True,
             )
         )
     elif detected_language in NON_LATIN_LANGUAGES:
@@ -157,7 +165,11 @@ def _transcribe_with_mlx(
             detected_language,
         )
         result = mlx_whisper.transcribe(
-            str(wav_path), path_or_hf_repo=model_path, language=detected_language, task="translate"
+            str(wav_path),
+            path_or_hf_repo=model_path,
+            language=detected_language,
+            task="translate",
+            verbose=True,
         )
     else:
         logger.info("Detected language: %s", detected_language)

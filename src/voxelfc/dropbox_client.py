@@ -93,6 +93,19 @@ class DropboxClient:
         except ApiError:
             return None
 
+    def move_file(self, from_path: str, to_path: str) -> str:
+        """Move/renomeia um arquivo. Idempotente: se from_path ja nao existe
+        mas to_path existe (ex: retomada apos um crash no meio do move),
+        considera que o move ja aconteceu antes e nao falha."""
+        ApiError = self._dbx_module.exceptions.ApiError
+        try:
+            result = self.dbx.files_move_v2(from_path, to_path, autorename=True)
+            return result.metadata.path_display
+        except ApiError:
+            if self.file_exists(to_path):
+                return to_path
+            raise
+
     def delete_file(self, dropbox_path: str) -> None:
         ApiError = self._dbx_module.exceptions.ApiError
         try:

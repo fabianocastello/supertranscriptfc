@@ -27,6 +27,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Pasta de destino (local ou Dropbox). Default: mesma pasta da origem.",
     )
     parser.add_argument(
+        "--archive",
+        default=None,
+        help="Se o processamento terminar OK, move (nao copia) o audio original e as "
+        "saidas geradas para esta pasta (local ou Dropbox, conforme --local).",
+    )
+    parser.add_argument(
         "--local",
         action="store_true",
         help="Trata --source/--dest como caminhos locais em vez de caminhos do Dropbox.",
@@ -104,12 +110,15 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.local:
             dest_dir = Path(args.dest) if args.dest else None
+            archive_dir = Path(args.archive) if args.archive else None
             source_path = Path(args.source)
             if source_path.is_dir():
-                summary = run_local_batch(config, source_path, dest_dir, recursive=args.recursive)
+                summary = run_local_batch(
+                    config, source_path, dest_dir, recursive=args.recursive, archive_dir=archive_dir
+                )
                 _log_batch_summary(logger, summary)
             else:
-                outputs = run_local_job(config, source_path, dest_dir)
+                outputs = run_local_job(config, source_path, dest_dir, archive_dir=archive_dir)
                 if outputs:
                     logger.info("Concluido. Arquivos gerados: %s", [str(p) for p in outputs])
                 else:
@@ -135,11 +144,18 @@ def main(argv: list[str] | None = None) -> int:
             )
             if client.is_folder(args.source):
                 summary = run_dropbox_batch(
-                    config, client, args.source, args.dest, recursive=args.recursive
+                    config,
+                    client,
+                    args.source,
+                    args.dest,
+                    recursive=args.recursive,
+                    archive_folder=args.archive,
                 )
                 _log_batch_summary(logger, summary)
             else:
-                outputs = run_dropbox_job(config, client, args.source, args.dest)
+                outputs = run_dropbox_job(
+                    config, client, args.source, args.dest, archive_folder=args.archive
+                )
                 if outputs:
                     logger.info("Concluido. Arquivos enviados ao Dropbox: %s", outputs)
                 else:

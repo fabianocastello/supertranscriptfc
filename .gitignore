@@ -19,3 +19,4 @@ env copy
 .env.*
 !.env.example
 scripts/folders.txt
+._*

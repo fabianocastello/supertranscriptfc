@@ -202,6 +202,15 @@ def process_file(
     return output_paths
 
 
+def _move_file_local(src: Path, dest_dir: Path) -> Path:
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest_path = dest_dir / src.name
+    if dest_path.exists():
+        dest_path.unlink()
+    shutil.move(str(src), str(dest_path))
+    return dest_path
+
+
 def cleanup_work_dir(work_dir: Path, keep_temp: bool) -> None:
     if keep_temp:
         logger.info("keep_temp ativo, mantendo %s", work_dir)
@@ -210,10 +219,16 @@ def cleanup_work_dir(work_dir: Path, keep_temp: bool) -> None:
     shutil.rmtree(work_dir, ignore_errors=True)
 
 
-def run_local_job(config: Config, source: Path, dest_dir: Path | None) -> list[Path]:
+def run_local_job(
+    config: Config, source: Path, dest_dir: Path | None, archive_dir: Path | None = None
+) -> list[Path]:
     """Processa um arquivo de audio local e copia as saidas para dest_dir
     (ou para a pasta do arquivo de origem, se dest_dir nao for informado).
-    O arquivo de origem nunca e' removido."""
+
+    Se archive_dir for informado e o processamento terminar com sucesso, o
+    audio original E os arquivos gerados sao movidos (nao copiados) para
+    essa pasta - util para "esvaziar" a pasta monitorada com o tempo. Se
+    archive_dir nao for informado, o arquivo de origem nunca e' removido."""
     config.ensure_dirs()
     output_stem, dest_dir, transcript_path, _lock_path = _local_target(source, dest_dir)
     source = source.resolve()
@@ -237,15 +252,32 @@ def run_local_job(config: Config, source: Path, dest_dir: Path | None) -> list[P
         shutil.copy2(p, dest_path)
         final_paths.append(dest_path)
 
+    if archive_dir is not None and final_paths:
+        archive_dir = Path(archive_dir).resolve()
+        moved_paths = [_move_file_local(p, archive_dir) for p in final_paths]
+        _move_file_local(source, archive_dir)
+        logger.info("[%s] Audio e saidas movidos para: %s", job_id, archive_dir)
+        final_paths = moved_paths
+
     registry.mark_processed(job_id, source_ref, [str(p) for p in final_paths])
     cleanup_work_dir(work_dir, config.keep_temp)
     return final_paths
 
 
-def run_dropbox_job(config: Config, dropbox_client, source_path: str, dest_folder: str | None) -> list[str]:
+def run_dropbox_job(
+    config: Config,
+    dropbox_client,
+    source_path: str,
+    dest_folder: str | None,
+    archive_folder: str | None = None,
+) -> list[str]:
     """Processa um arquivo de audio no Dropbox: download -> pipeline -> upload
     das saidas -> limpeza dos temporarios. dest_folder default = mesma pasta
-    do arquivo de origem."""
+    do arquivo de origem.
+
+    Se archive_folder for informado e o processamento terminar com sucesso,
+    o audio original E as saidas recem-enviadas sao movidas (nao copiadas)
+    para essa pasta no proprio Dropbox."""
     config.ensure_dirs()
     source_ref = f"dropbox:{source_path}"
     job_id = compute_job_id(source_ref)
@@ -304,6 +336,23 @@ def run_dropbox_job(config: Config, dropbox_client, source_path: str, dest_folde
             uploaded = state.data["uploaded"]
             logger.info("[%s] Upload ja concluido, pulando.", job_id)
 
+        if archive_folder is not None and uploaded:
+            archive_folder = archive_folder.rstrip("/") if archive_folder != "/" else archive_folder
+            if not state.is_done("archived"):
+                dropbox_client.ensure_folder(archive_folder)
+                moved = []
+                for remote_path in uploaded:
+                    filename = remote_path.rsplit("/", 1)[-1]
+                    moved.append(dropbox_client.move_file(remote_path, f"{archive_folder}/{filename}"))
+                audio_filename = PurePosixPath(source_path).name
+                dropbox_client.move_file(source_path, f"{archive_folder}/{audio_filename}")
+                state.mark_done("archived", archived=moved)
+                uploaded = moved
+                logger.info("[%s] Audio e saidas movidos para: %s", job_id, archive_folder)
+            else:
+                uploaded = state.data["archived"]
+                logger.info("[%s] Arquivamento ja concluido, pulando.", job_id)
+
         registry.mark_processed(job_id, source_ref, uploaded)
         cleanup_work_dir(work_dir, config.keep_temp)
         return uploaded
@@ -320,7 +369,11 @@ def _iter_local_audio_files(source_dir: Path, recursive: bool) -> list[Path]:
 
 
 def run_local_batch(
-    config: Config, source_dir: Path, dest_dir: Path | None, recursive: bool = False
+    config: Config,
+    source_dir: Path,
+    dest_dir: Path | None,
+    recursive: bool = False,
+    archive_dir: Path | None = None,
 ) -> dict[str, list]:
     """Processa todos os arquivos de audio de um diretorio local. Continua
     para o proximo arquivo mesmo se um deles falhar; retorna um resumo com
@@ -353,7 +406,7 @@ def run_local_batch(
     for i, audio_path in enumerate(to_work_on, start=1):
         logger.info("--- Arquivo %d/%d: %s ---", i, len(to_work_on), audio_path.name)
         try:
-            outputs = run_local_job(config, audio_path, dest_dir)
+            outputs = run_local_job(config, audio_path, dest_dir, archive_dir=archive_dir)
         except Exception:
             logger.exception("Falha ao processar %s, continuando com os demais.", audio_path)
             summary["failed"].append(str(audio_path))
@@ -371,6 +424,7 @@ def run_dropbox_batch(
     source_folder: str,
     dest_folder: str | None,
     recursive: bool = False,
+    archive_folder: str | None = None,
 ) -> dict[str, list]:
     """Processa todos os arquivos de audio de uma pasta do Dropbox. Continua
     para o proximo arquivo mesmo se um deles falhar; retorna um resumo com
@@ -405,7 +459,9 @@ def run_dropbox_batch(
     for i, audio_path in enumerate(to_work_on, start=1):
         logger.info("--- Arquivo %d/%d: %s ---", i, len(to_work_on), audio_path)
         try:
-            outputs = run_dropbox_job(config, dropbox_client, audio_path, dest_folder)
+            outputs = run_dropbox_job(
+                config, dropbox_client, audio_path, dest_folder, archive_folder=archive_folder
+            )
         except Exception:
             logger.exception("Falha ao processar %s, continuando com os demais.", audio_path)
             summary["failed"].append(audio_path)

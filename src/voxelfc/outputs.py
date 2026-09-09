@@ -1,8 +1,19 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from .merge import LabeledSegment
+
+_TIMESTAMP_RE = re.compile(r"(\d{2}):(\d{2}):(\d{2})[.,](\d{3})")
+
+
+def _parse_timestamp(text: str) -> float | None:
+    match = _TIMESTAMP_RE.search(text)
+    if not match:
+        return None
+    hours, minutes, seconds, millis = (int(g) for g in match.groups())
+    return hours * 3600 + minutes * 60 + seconds + millis / 1000
 
 
 def _format_srt_timestamp(seconds: float) -> str:
@@ -65,6 +76,46 @@ def write_txt(segments: list[LabeledSegment], path: Path, metadata: dict | None 
 
     front_matter = format_front_matter(metadata) if metadata else ""
     path.write_text(front_matter + "\n\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+def parse_subtitle_text(text: str) -> list[tuple[float, float, str]]:
+    """Parses SRT or WebVTT content into a list of (start, end, text)
+    segments. Tolerant of both formats: numeric cue indexes (SRT) and the
+    'WEBVTT' header line (if present) are simply skipped, since neither
+    contains a '-->' timestamp arrow."""
+    segments: list[tuple[float, float, str]] = []
+    lines = text.splitlines()
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        if "-->" in line:
+            start_str, _, end_str = line.partition("-->")
+            start = _parse_timestamp(start_str)
+            end = _parse_timestamp(end_str)
+            i += 1
+            text_lines = []
+            while i < len(lines) and lines[i].strip():
+                text_lines.append(lines[i].strip())
+                i += 1
+            if start is not None and end is not None and text_lines:
+                segments.append((start, end, " ".join(text_lines)))
+        else:
+            i += 1
+    return segments
+
+
+def write_plain_txt(
+    segments: list[tuple[float, float, str]], path: Path, metadata: dict | None = None
+) -> Path:
+    """Writes plain running text from (start, end, text) segments with no
+    speaker attribution - used when reusing a pre-existing transcript (e.g.
+    Dropbox's own automatic transcription) that carries no diarization
+    info to attach to each line."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    body = " ".join(text for _, _, text in segments if text)
+    front_matter = format_front_matter(metadata) if metadata else ""
+    path.write_text(front_matter + body + "\n", encoding="utf-8")
     return path
 
 

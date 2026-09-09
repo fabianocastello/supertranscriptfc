@@ -12,7 +12,7 @@ from .config import AUDIO_EXTENSIONS, Config
 from .diarize import diarize_audio
 from .merge import assign_speakers
 from .naming import build_output_stem
-from .outputs import write_srt, write_txt, write_vtt
+from .outputs import parse_subtitle_text, write_plain_txt, write_srt, write_txt, write_vtt
 from .progress import format_duration
 from .state import JobState, ProcessedRegistry, compute_job_id
 from .transcribe import transcribe_audio
@@ -92,6 +92,58 @@ def _ensure_dropbox_name_trimmed(dropbox_client, path: str) -> str:
     dropbox_client.move_file(path, new_path)
     logger.info("Renamed '%s' -> '%s' (trimmed whitespace before the extension).", path, new_path)
     return new_path
+
+
+def _find_existing_subtitle_local(source: Path) -> tuple[str, Path] | None:
+    """Looks for a pre-existing .vtt or .srt sitting right next to the
+    source audio, sharing its exact filename stem (e.g. Dropbox's own
+    automatic audio transcription writes 'recording.vtt' next to
+    'recording.m4a'). Returns (extension, path), preferring .vtt, or None."""
+    for ext in ("vtt", "srt"):
+        candidate = source.with_suffix(f".{ext}")
+        if candidate.exists():
+            return ext, candidate
+    return None
+
+
+def _find_existing_subtitle_dropbox(dropbox_client, source_path: str) -> tuple[str, str] | None:
+    """Dropbox equivalent of _find_existing_subtitle_local."""
+    source_purepath = PurePosixPath(source_path)
+    stem_path = source_purepath.parent / source_purepath.stem
+    for ext in ("vtt", "srt"):
+        candidate = f"{stem_path}.{ext}"
+        if dropbox_client.file_exists(candidate):
+            return ext, candidate
+    return None
+
+
+def _build_outputs_from_existing_subtitle(
+    config: Config,
+    subtitle_text: str,
+    subtitle_name: str,
+    audio_name: str,
+    output_stem: str,
+    output_dir: Path,
+) -> list[Path]:
+    """Builds outputs directly from an already-existing .vtt/.srt instead
+    of running conversion/transcription/diarization - used when a matching
+    subtitle already sits next to the source audio (e.g. produced by
+    Dropbox's own automatic transcription)."""
+    segments = parse_subtitle_text(subtitle_text)
+    metadata = {
+        "system": "VoxelFC 1.0",
+        "audio_file": audio_name,
+        "processed_date": datetime.now().strftime("%Y-%m-%d"),
+        "running_on": socket.gethostname(),
+        "remarks": f"Used pre-existent transcript in {subtitle_name}",
+    }
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_paths: list[Path] = []
+    if config.write_txt:
+        output_paths.append(
+            write_plain_txt(segments, output_dir / f"{output_stem}{TRANSCRIPT_SUFFIX}", metadata=metadata)
+        )
+    return output_paths
 
 
 def _local_target(
@@ -330,9 +382,26 @@ def run_local_job(
         return []
 
     work_dir = config.tmp_dir / job_id
-    output_paths = process_file(
-        config, input_path=source, output_stem=output_stem, work_dir=work_dir, source_ref=source_ref
-    )
+    existing_subtitle = _find_existing_subtitle_local(source)
+    if existing_subtitle is not None:
+        _kind, subtitle_path = existing_subtitle
+        logger.info(
+            "[%s] Found pre-existing transcript (%s); skipping conversion and transcription.",
+            job_id,
+            subtitle_path.name,
+        )
+        output_paths = _build_outputs_from_existing_subtitle(
+            config,
+            subtitle_path.read_text(encoding="utf-8"),
+            subtitle_path.name,
+            source.name,
+            output_stem,
+            work_dir / "output",
+        )
+    else:
+        output_paths = process_file(
+            config, input_path=source, output_stem=output_stem, work_dir=work_dir, source_ref=source_ref
+        )
 
     dest_dir.mkdir(parents=True, exist_ok=True)
     final_paths = []
@@ -427,16 +496,33 @@ def run_dropbox_job(
         state = JobState(job_id=job_id, source_ref=source_ref, work_dir=work_dir)
         state.load()
 
-        local_input = work_dir / Path(source_path).name
-        if not state.is_done("downloaded"):
-            dropbox_client.download_file(source_path, local_input)
-            state.mark_done("downloaded")
+        existing_subtitle = _find_existing_subtitle_dropbox(dropbox_client, source_path)
+        if existing_subtitle is not None:
+            _kind, subtitle_remote_path = existing_subtitle
+            logger.info(
+                "[%s] Found pre-existing transcript (%s); skipping download/conversion/transcription.",
+                job_id,
+                subtitle_remote_path,
+            )
+            output_paths = _build_outputs_from_existing_subtitle(
+                config,
+                dropbox_client.read_text_file(subtitle_remote_path),
+                PurePosixPath(subtitle_remote_path).name,
+                PurePosixPath(source_path).name,
+                stem,
+                work_dir / "output",
+            )
         else:
-            logger.info("[%s] Download already done, skipping.", job_id)
+            local_input = work_dir / Path(source_path).name
+            if not state.is_done("downloaded"):
+                dropbox_client.download_file(source_path, local_input)
+                state.mark_done("downloaded")
+            else:
+                logger.info("[%s] Download already done, skipping.", job_id)
 
-        output_paths = process_file(
-            config, input_path=local_input, output_stem=stem, work_dir=work_dir, source_ref=source_ref
-        )
+            output_paths = process_file(
+                config, input_path=local_input, output_stem=stem, work_dir=work_dir, source_ref=source_ref
+            )
 
         if not state.is_done("uploaded"):
             uploaded = []

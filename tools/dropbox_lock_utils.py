@@ -10,12 +10,12 @@ import tempfile
 from dotenv import dotenv_values
 
 AUDIO_EXTENSIONS = (".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".wma", ".mp4", ".mov")
-TRANSCRIPT_SUFFIX = ".voxel.txt"
+TRANSCRIPT_SUFFIX = ".voxel.md"
 LOCK_SUFFIX = ".voxel.lock"
-# Older runs wrote the transcript/lock under these names; recognized here
-# too so files already produced under them are still found by these
-# read-only tools.
-LEGACY_TRANSCRIPT_SUFFIX = ".transcriptFC.txt"
+# Older runs wrote the transcript under these names (newest first);
+# recognized here too so files already produced under them are still found
+# by these read-only tools.
+LEGACY_TRANSCRIPT_SUFFIXES = (".voxel.txt", ".transcriptFC.txt")
 LEGACY_LOCK_SUFFIX = ".transcriptFC.lock"
 STALE_AFTER = timedelta(hours=36)
 VALID_AGE_RE = re.compile(r"^(?P<amount>[1-9]\d*)(?P<unit>[hms])$")
@@ -25,11 +25,12 @@ FRONT_MATTER_RE = re.compile(r"^---\s*\n(?P<body>.*?)\n---(?:\s*\n|$)", re.DOTAL
 
 def transcript_suffix_for(path: str) -> str | None:
     """Returns whichever transcript suffix (current or legacy) `path` ends
-    with, or None if it doesn't end with either."""
+    with, or None if it doesn't end with any of them."""
     if path.endswith(TRANSCRIPT_SUFFIX):
         return TRANSCRIPT_SUFFIX
-    if path.endswith(LEGACY_TRANSCRIPT_SUFFIX):
-        return LEGACY_TRANSCRIPT_SUFFIX
+    for suffix in LEGACY_TRANSCRIPT_SUFFIXES:
+        if path.endswith(suffix):
+            return suffix
     return None
 
 
@@ -241,9 +242,11 @@ def collect_locks(
         stem = strip_lock_suffix(entry.path_display)
         transcript_path = stem + TRANSCRIPT_SUFFIX
         if transcript_path not in files_by_path:
-            legacy_path = stem + LEGACY_TRANSCRIPT_SUFFIX
-            if legacy_path in files_by_path:
-                transcript_path = legacy_path
+            for suffix in LEGACY_TRANSCRIPT_SUFFIXES:
+                legacy_path = stem + suffix
+                if legacy_path in files_by_path:
+                    transcript_path = legacy_path
+                    break
         audio_duration = None
         if include_audio_duration:
             audio_duration = (

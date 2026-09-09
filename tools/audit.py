@@ -358,7 +358,7 @@ def make_report(data: dict) -> str:
         f"- **Dropbox folder:** `{data['root']}`",
         f"- **Query performed at:** `{data['generated_at']}`",
         f"- **Audio files found:** {data['audio_count']}",
-        f"- **Transcripts (`.voxel.txt` + legacy `.transcriptFC.txt`):** {data['transcript_count']}",
+        f"- **Transcripts (`.voxel.md` + legacy `.voxel.txt`/`.transcriptFC.txt`):** {data['transcript_count']}",
         f"- **Locks found:** {data['lock_count']}",
         "",
         "## Locks and current runs",

@@ -1,7 +1,7 @@
 # VOXEL FC — File Companion
 
 Downloads an audio file from a Dropbox folder, transcribes it, diarizes the
-speakers (`Person 1`, `Person 2`, ...), and uploads `.voxel.txt` /
+speakers (`Person 1`, `Person 2`, ...), and uploads `.voxel.md` /
 `.srt` / `.voxel.vtt` back to Dropbox.
 
 `voxelfc` is the product's technical name. During the migration, the legacy
@@ -115,12 +115,13 @@ python scripts/migrate_home.py --from ~/.supertranscriptfc --to ~/.voxelfc
 ```
 
 The old directory isn't deleted. In case of rollback, set
-`VOXELFC_HOME=~/.supertranscriptfc`. The Dropbox filenames `.voxel.txt`,
+`VOXELFC_HOME=~/.supertranscriptfc`. The Dropbox filenames `.voxel.md`,
 `.srt`, `.voxel.vtt`, and `.voxel.lock` remain stable so that
 already-processed audio files aren't run again. Files written by older
-runs as `.transcriptFC.txt`/`.transcriptFC.lock` are still recognized as
-done/locked and are never renamed in bulk; only new runs write the current
-`.voxel.*` names.
+runs as `.voxel.txt`/`.transcriptFC.txt` (transcript) or
+`.transcriptFC.lock` (lock) are still recognized as done/locked and are
+never renamed in bulk; only new runs write the current `.voxel.md`/
+`.voxel.lock` names.
 
 
 Each stage (download, conversion, transcription, diarization, outputs,

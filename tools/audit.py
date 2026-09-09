@@ -23,13 +23,14 @@ from pathlib import Path, PurePosixPath
 from dotenv import dotenv_values
 
 from dropbox_lock_utils import (
+    lock_suffix_for,
     probe_remote_audio_duration,
+    strip_lock_suffix,
     strip_transcript_suffix,
     transcript_suffix_for,
 )
 
 AUDIO_EXTENSIONS = (".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".wma", ".mp4", ".mov")
-LOCK_SUFFIX = ".transcriptFC.lock"
 MIN_AUDIO_FOR_METRICS_SECONDS = 60
 
 _DURATION_RE = re.compile(r"^(?:(?P<h>\d+)h)?(?:(?P<m>\d+)m)?(?:(?P<s>\d+)s)?$")
@@ -189,7 +190,7 @@ def audit(root: str, env_path: Path) -> dict:
         path for path, entry in files.items() if PurePosixPath(entry.name).suffix.lower() in AUDIO_EXTENSIONS
     )
     transcript_paths = sorted(path for path in files if transcript_suffix_for(path))
-    lock_paths = sorted(path for path in files if path.endswith(LOCK_SUFFIX))
+    lock_paths = sorted(path for path in files if lock_suffix_for(path))
     progress(
         f"Dropbox listed: {len(audio_paths)} audio files, {len(transcript_paths)} transcripts, and {len(lock_paths)} locks"
     )
@@ -250,11 +251,12 @@ def audit(root: str, env_path: Path) -> dict:
         if started_at:
             started_utc, start_timezone = normalize_lock_start(started_at, server_modified)
         age = age_seconds(started_utc, now_utc) if started_utc else None
-        transcript = transcript_by_stem.get(path[: -len(LOCK_SUFFIX)])
+        lock_stem = strip_lock_suffix(path)
+        transcript = transcript_by_stem.get(lock_stem)
         audio_duration = transcript["audio_duration_seconds"] if transcript else None
         if audio_duration is None:
             for extension in AUDIO_EXTENSIONS:
-                audio_path = path[: -len(LOCK_SUFFIX)] + extension
+                audio_path = lock_stem + extension
                 if audio_path in files:
                     progress(f"measuring audio for lock {index}/{len(lock_paths)}")
                     audio_duration = probe_remote_audio_duration(dbx, audio_path)

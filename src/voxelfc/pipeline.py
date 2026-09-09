@@ -26,11 +26,13 @@ LOCK_STALE_AFTER = timedelta(hours=36)
 
 TRANSCRIPT_SUFFIX = ".voxel.txt"
 VTT_SUFFIX = ".voxel.vtt"
-LOCK_SUFFIX = ".transcriptFC.lock"
-# Older runs wrote the transcript as "<stem>.transcriptFC.txt". Recognized
-# as "already done" so the ~250+ files already produced under that name
-# aren't reprocessed, but new runs only ever write TRANSCRIPT_SUFFIX.
+LOCK_SUFFIX = ".voxel.lock"
+# Older runs wrote the transcript/lock as "<stem>.transcriptFC.txt"/".lock".
+# Recognized as "already done"/"locked" so files already produced under
+# those names aren't reprocessed or double-claimed, but new runs only ever
+# write TRANSCRIPT_SUFFIX/LOCK_SUFFIX.
 LEGACY_TRANSCRIPT_SUFFIX = ".transcriptFC.txt"
+LEGACY_LOCK_SUFFIX = ".transcriptFC.lock"
 
 
 def _make_lock_content() -> str:
@@ -92,23 +94,28 @@ def _ensure_dropbox_name_trimmed(dropbox_client, path: str) -> str:
     return new_path
 
 
-def _local_target(source: Path, dest_dir: Path | None) -> tuple[str, Path, Path, Path, Path]:
+def _local_target(
+    source: Path, dest_dir: Path | None
+) -> tuple[str, Path, Path, Path, Path, Path]:
     """For a local audio file, computes the output base name and the paths
-    where the transcript (current and legacy names) and lock (if any) would
-    live at the destination."""
+    where the transcript and lock (current and legacy names) would live at
+    the destination."""
     source = source.resolve()
     resolved_dest_dir = (dest_dir or source.parent).resolve()
     stem = build_output_stem(source.stem, source.parent.name)
     transcript_path = resolved_dest_dir / f"{stem}{TRANSCRIPT_SUFFIX}"
     legacy_transcript_path = resolved_dest_dir / f"{stem}{LEGACY_TRANSCRIPT_SUFFIX}"
     lock_path = resolved_dest_dir / f"{stem}{LOCK_SUFFIX}"
-    return stem, resolved_dest_dir, transcript_path, legacy_transcript_path, lock_path
+    legacy_lock_path = resolved_dest_dir / f"{stem}{LEGACY_LOCK_SUFFIX}"
+    return stem, resolved_dest_dir, transcript_path, legacy_transcript_path, lock_path, legacy_lock_path
 
 
-def _dropbox_target(source_path: str, dest_folder: str | None) -> tuple[str, str, str, str, str]:
+def _dropbox_target(
+    source_path: str, dest_folder: str | None
+) -> tuple[str, str, str, str, str, str]:
     """For a Dropbox audio file, computes the output base name and the
-    remote paths where the transcript (current and legacy names) and lock
-    (if any) would live at the destination."""
+    remote paths where the transcript and lock (current and legacy names)
+    would live at the destination."""
     source_purepath = PurePosixPath(source_path)
     stem = build_output_stem(source_purepath.stem, source_purepath.parent.name)
     resolved_dest_folder = dest_folder or str(source_purepath.parent)
@@ -117,7 +124,8 @@ def _dropbox_target(source_path: str, dest_folder: str | None) -> tuple[str, str
     transcript_path = f"{resolved_dest_folder}/{stem}{TRANSCRIPT_SUFFIX}"
     legacy_transcript_path = f"{resolved_dest_folder}/{stem}{LEGACY_TRANSCRIPT_SUFFIX}"
     lock_path = f"{resolved_dest_folder}/{stem}{LOCK_SUFFIX}"
-    return stem, resolved_dest_folder, transcript_path, legacy_transcript_path, lock_path
+    legacy_lock_path = f"{resolved_dest_folder}/{stem}{LEGACY_LOCK_SUFFIX}"
+    return stem, resolved_dest_folder, transcript_path, legacy_transcript_path, lock_path, legacy_lock_path
 
 
 def process_file(
@@ -309,8 +317,8 @@ def run_local_job(
     archive_dir isn't given, the source file is never removed."""
     config.ensure_dirs()
     source = _ensure_local_name_trimmed(source.resolve())
-    output_stem, dest_dir, transcript_path, legacy_transcript_path, _lock_path = _local_target(
-        source, dest_dir
+    output_stem, dest_dir, transcript_path, legacy_transcript_path, _lock_path, _legacy_lock_path = (
+        _local_target(source, dest_dir)
     )
     source_ref = f"local:{source}"
     job_id = compute_job_id(source_ref)
@@ -341,7 +349,9 @@ def run_local_job(
         matching = [
             p
             for p in sorted(dest_dir.glob(f"{output_stem}.*"))
-            if p.resolve() != source and not p.name.endswith(LOCK_SUFFIX)
+            if p.resolve() != source
+            and not p.name.endswith(LOCK_SUFFIX)
+            and not p.name.endswith(LEGACY_LOCK_SUFFIX)
         ]
         moved_paths = [_move_file_local(p, archive_dir) for p in matching]
         _move_file_local(source, archive_dir)
@@ -373,9 +383,14 @@ def run_dropbox_job(
     job_id = compute_job_id(source_ref)
     registry = ProcessedRegistry(config.state_file)
 
-    stem, dest_folder, transcript_remote_path, legacy_transcript_remote_path, lock_remote_path = (
-        _dropbox_target(source_path, dest_folder)
-    )
+    (
+        stem,
+        dest_folder,
+        transcript_remote_path,
+        legacy_transcript_remote_path,
+        lock_remote_path,
+        legacy_lock_remote_path,
+    ) = _dropbox_target(source_path, dest_folder)
 
     if not config.force and (
         dropbox_client.file_exists(transcript_remote_path)
@@ -385,7 +400,12 @@ def run_dropbox_job(
         return []
 
     if not config.force:
-        lock_content = dropbox_client.read_text_file(lock_remote_path)
+        # Check the current lock name first, then fall back to the legacy
+        # name - a lock created by a not-yet-updated machine should still be
+        # respected, but we only ever write/delete the current name below.
+        lock_content = dropbox_client.read_text_file(lock_remote_path) or dropbox_client.read_text_file(
+            legacy_lock_remote_path
+        )
         if lock_content and not _is_lock_stale(lock_content):
             logger.info(
                 "Already being processed by another machine (%s), skipping: %s",
@@ -440,7 +460,7 @@ def run_dropbox_job(
                 matching = [
                     p
                     for p in dropbox_client.list_files_matching_stem(dest_folder, stem)
-                    if p != source_path and p != lock_remote_path
+                    if p != source_path and p != lock_remote_path and p != legacy_lock_remote_path
                 ]
                 moved = []
                 for remote_path in matching:
@@ -514,9 +534,11 @@ def run_local_batch(
     n_transcript = 0
     n_lock = 0
     for audio_path in files:
-        _, _, transcript_path, legacy_transcript_path, lock_path = _local_target(audio_path, dest_dir)
+        _, _, transcript_path, legacy_transcript_path, lock_path, legacy_lock_path = _local_target(
+            audio_path, dest_dir
+        )
         has_transcript = transcript_path.exists() or legacy_transcript_path.exists()
-        has_lock = lock_path.exists()
+        has_lock = lock_path.exists() or legacy_lock_path.exists()
         n_transcript += has_transcript
         n_lock += has_lock
         if config.force or not (has_transcript or has_lock):
@@ -572,13 +594,17 @@ def run_dropbox_batch(
     n_transcript = 0
     n_lock = 0
     for audio_path in files:
-        _, _, transcript_path, legacy_transcript_path, lock_path = _dropbox_target(audio_path, dest_folder)
+        _, _, transcript_path, legacy_transcript_path, lock_path, legacy_lock_path = _dropbox_target(
+            audio_path, dest_folder
+        )
         has_transcript = dropbox_client.file_exists(transcript_path) or dropbox_client.file_exists(
             legacy_transcript_path
         )
         has_lock = False
         if not has_transcript:
-            lock_content = dropbox_client.read_text_file(lock_path)
+            lock_content = dropbox_client.read_text_file(lock_path) or dropbox_client.read_text_file(
+                legacy_lock_path
+            )
             has_lock = bool(lock_content) and not _is_lock_stale(lock_content)
         n_transcript += has_transcript
         n_lock += has_lock

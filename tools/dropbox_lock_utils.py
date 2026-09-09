@@ -11,10 +11,16 @@ from dotenv import dotenv_values
 
 AUDIO_EXTENSIONS = (".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".wma", ".mp4", ".mov")
 TRANSCRIPT_SUFFIX = ".voxel.txt"
-# Older runs wrote the transcript as "<stem>.transcriptFC.txt"; recognized
-# here too so existing files are still found by these read-only tools.
+LOCK_SUFFIX = ".voxel.lock"
+# Older runs wrote the transcript/lock under these names; recognized here
+# too so files already produced under them are still found by these
+# read-only tools.
 LEGACY_TRANSCRIPT_SUFFIX = ".transcriptFC.txt"
-LOCK_SUFFIX = ".transcriptFC.lock"
+LEGACY_LOCK_SUFFIX = ".transcriptFC.lock"
+STALE_AFTER = timedelta(hours=36)
+VALID_AGE_RE = re.compile(r"^(?P<amount>[1-9]\d*)(?P<unit>[hms])$")
+DURATION_RE = re.compile(r"^(?:(?P<h>\d+)h)?(?:(?P<m>\d+)m)?(?:(?P<s>\d+)s)?$")
+FRONT_MATTER_RE = re.compile(r"^---\s*\n(?P<body>.*?)\n---(?:\s*\n|$)", re.DOTALL)
 
 
 def transcript_suffix_for(path: str) -> str | None:
@@ -32,10 +38,23 @@ def strip_transcript_suffix(path: str) -> str:
     legacy). Returns `path` unchanged if it ends with neither."""
     suffix = transcript_suffix_for(path)
     return path[: -len(suffix)] if suffix else path
-STALE_AFTER = timedelta(hours=36)
-VALID_AGE_RE = re.compile(r"^(?P<amount>[1-9]\d*)(?P<unit>[hms])$")
-DURATION_RE = re.compile(r"^(?:(?P<h>\d+)h)?(?:(?P<m>\d+)m)?(?:(?P<s>\d+)s)?$")
-FRONT_MATTER_RE = re.compile(r"^---\s*\n(?P<body>.*?)\n---(?:\s*\n|$)", re.DOTALL)
+
+
+def lock_suffix_for(path: str) -> str | None:
+    """Returns whichever lock suffix (current or legacy) `path` ends with,
+    or None if it doesn't end with either."""
+    if path.endswith(LOCK_SUFFIX):
+        return LOCK_SUFFIX
+    if path.endswith(LEGACY_LOCK_SUFFIX):
+        return LEGACY_LOCK_SUFFIX
+    return None
+
+
+def strip_lock_suffix(path: str) -> str:
+    """Removes whichever lock suffix `path` ends with (current or legacy).
+    Returns `path` unchanged if it ends with neither."""
+    suffix = lock_suffix_for(path)
+    return path[: -len(suffix)] if suffix else path
 
 
 @dataclass(frozen=True)
@@ -206,7 +225,7 @@ def collect_locks(
     files_by_path = {entry.path_display: entry for entry in entries}
     locks: list[LockRecord] = []
     for entry in entries:
-        if not entry.name.endswith(LOCK_SUFFIX):
+        if lock_suffix_for(entry.name) is None:
             continue
         content = read_remote_text(dbx, entry.path_display)
         machine, started_raw = parse_lock(content)
@@ -219,7 +238,7 @@ def collect_locks(
             except ValueError:
                 started_utc = None
         age = max(0.0, (now_utc - started_utc).total_seconds()) if started_utc else None
-        stem = entry.path_display[: -len(LOCK_SUFFIX)]
+        stem = strip_lock_suffix(entry.path_display)
         transcript_path = stem + TRANSCRIPT_SUFFIX
         if transcript_path not in files_by_path:
             legacy_path = stem + LEGACY_TRANSCRIPT_SUFFIX
@@ -234,7 +253,7 @@ def collect_locks(
             )
             if audio_duration is None:
                 for extension in AUDIO_EXTENSIONS:
-                    audio_path = entry.path_display[: -len(LOCK_SUFFIX)] + extension
+                    audio_path = stem + extension
                     if audio_path in files_by_path:
                         audio_duration = probe_remote_audio_duration(dbx, audio_path)
                         break

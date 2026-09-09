@@ -396,6 +396,33 @@ def run_dropbox_job(
         dropbox_client.delete_file(lock_remote_path)
 
 
+def _relative_archive_dir(audio_path: Path, source_dir: Path, archive_dir: Path) -> Path:
+    """For --recursive batches, mirrors the audio file's subfolder (relative
+    to the scanned root) under archive_dir, instead of flattening every
+    episode into one folder - avoids collisions when different subfolders
+    reuse the same filename (e.g. every episode's audio literally named
+    'audio.mp3')."""
+    try:
+        relative_parent = audio_path.resolve().parent.relative_to(source_dir)
+    except ValueError:
+        relative_parent = Path(".")
+    return archive_dir / relative_parent
+
+
+def _relative_archive_folder(audio_path: str, source_folder: str, archive_folder: str) -> str:
+    """Dropbox equivalent of _relative_archive_dir."""
+    source_root = source_folder.rstrip("/") or "/"
+    parent = str(PurePosixPath(audio_path).parent)
+    if source_root == "/":
+        relative = parent.lstrip("/")
+    elif parent == source_root or parent.startswith(source_root + "/"):
+        relative = parent[len(source_root):].lstrip("/")
+    else:
+        relative = ""
+    archive_root = archive_folder.rstrip("/") if archive_folder != "/" else archive_folder
+    return f"{archive_root}/{relative}" if relative else archive_root
+
+
 def _iter_local_audio_files(source_dir: Path, recursive: bool) -> list[Path]:
     pattern_fn = source_dir.rglob if recursive else source_dir.glob
     files = [
@@ -441,8 +468,13 @@ def run_local_batch(
     summary: dict[str, list] = {"processed": [], "skipped": [], "failed": []}
     for i, audio_path in enumerate(to_work_on, start=1):
         logger.info("--- File %d/%d: %s ---", i, len(to_work_on), audio_path.name)
+        this_archive_dir = (
+            _relative_archive_dir(audio_path, source_dir, archive_dir)
+            if archive_dir is not None
+            else None
+        )
         try:
-            outputs = run_local_job(config, audio_path, dest_dir, archive_dir=archive_dir)
+            outputs = run_local_job(config, audio_path, dest_dir, archive_dir=this_archive_dir)
         except Exception:
             logger.exception("Failed to process %s, continuing with the rest.", audio_path)
             summary["failed"].append(str(audio_path))
@@ -494,9 +526,14 @@ def run_dropbox_batch(
     summary: dict[str, list] = {"processed": [], "skipped": [], "failed": []}
     for i, audio_path in enumerate(to_work_on, start=1):
         logger.info("--- File %d/%d: %s ---", i, len(to_work_on), audio_path)
+        this_archive_folder = (
+            _relative_archive_folder(audio_path, source_folder, archive_folder)
+            if archive_folder is not None
+            else None
+        )
         try:
             outputs = run_dropbox_job(
-                config, dropbox_client, audio_path, dest_folder, archive_folder=archive_folder
+                config, dropbox_client, audio_path, dest_folder, archive_folder=this_archive_folder
             )
         except Exception:
             logger.exception("Failed to process %s, continuing with the rest.", audio_path)

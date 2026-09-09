@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Monitora varias pastas do Dropbox na mesma maquina, chamando
-# supertranscriptfc para cada uma em sequencia. E' seguro reiniciar do zero
+# voxelfc para cada uma em sequencia. E' seguro reiniciar do zero
 # a qualquer momento (apos um crash, por exemplo): cada arquivo so' e'
 # considerado concluido com base na existencia real do .transcriptFC.txt no
 # proprio Dropbox, entao pastas/arquivos ja prontos sao pulados rapido em
@@ -65,7 +65,7 @@ run_one_pass() {
         total=$((total + 1))
         echo ""
         echo "=== [$total] Pasta: $line ==="
-        if supertranscriptfc --source "$line" "${EXTRA_ARGS[@]}"; then
+        if voxelfc --source "$line" "${EXTRA_ARGS[@]}"; then
             ok=$((ok + 1))
         else
             fail=$((fail + 1))

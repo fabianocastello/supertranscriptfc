@@ -2,7 +2,7 @@
 REM Atualiza o codigo sem precisar do git instalado: baixa o ZIP do branch
 REM main direto do GitHub usando curl.exe e tar.exe (ambos ja vem embutidos
 REM no Windows 10 1803+ / Windows 11), extrai e substitui os arquivos do
-REM projeto, preservando .venv e .env. Depois roda o supertranscriptfc com
+REM projeto, preservando .venv e .env. Depois roda o voxelfc com
 REM os argumentos passados.
 REM
 REM Uso: scripts\update-nogit.bat --source C:\caminho\audio.mp3 --local --model-size large-v3
@@ -24,9 +24,9 @@ if errorlevel 1 (
     goto :fail
 )
 
-set "ZIP_URL=https://github.com/fabianocastello/supertranscriptfc/archive/refs/heads/main.zip"
-set "TMP_ZIP=%TEMP%\supertranscriptfc_update.zip"
-set "TMP_EXTRACT=%TEMP%\supertranscriptfc_update_extract"
+set "ZIP_URL=https://github.com/fabianocastello/voxelfc/archive/refs/heads/main.zip"
+set "TMP_ZIP=%TEMP%\voxelfc_update.zip"
+set "TMP_EXTRACT=%TEMP%\voxelfc_update_extract"
 
 echo == Baixando codigo mais recente ==
 curl -L -o "%TMP_ZIP%" "%ZIP_URL%"
@@ -37,7 +37,7 @@ mkdir "%TMP_EXTRACT%"
 tar -xf "%TMP_ZIP%" -C "%TMP_EXTRACT%"
 if errorlevel 1 goto :fail
 
-REM O zip do GitHub extrai para uma subpasta tipo supertranscriptfc-main
+REM O zip do GitHub extrai para uma subpasta tipo voxelfc-main
 set "EXTRACTED_DIR="
 for /d %%D in ("%TMP_EXTRACT%\*") do set "EXTRACTED_DIR=%%D"
 if not defined EXTRACTED_DIR goto :fail
@@ -61,8 +61,8 @@ if exist ".venv\Scripts\activate.bat" (
     pip install -q -e ".[dropbox,transcribe,diarize]" >nul 2>&1
 )
 
-echo == Rodando: supertranscriptfc %* ==
-supertranscriptfc %*
+echo == Rodando: voxelfc %* ==
+voxelfc %*
 exit /b %ERRORLEVEL%
 
 :fail

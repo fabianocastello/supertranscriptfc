@@ -5,7 +5,7 @@ from pathlib import Path
 
 from .config import AUDIO_EXTENSIONS
 
-logger = logging.getLogger("supertranscriptfc")
+logger = logging.getLogger("voxelfc")
 
 
 class DropboxClient:

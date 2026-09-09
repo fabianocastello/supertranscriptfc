@@ -5,7 +5,7 @@ import wave
 from dataclasses import dataclass
 from pathlib import Path
 
-logger = logging.getLogger("supertranscriptfc")
+logger = logging.getLogger("voxelfc")
 
 
 @dataclass

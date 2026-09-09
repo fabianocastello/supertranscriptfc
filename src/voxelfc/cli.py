@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import warnings
 from pathlib import Path
 
 from .config import Config
@@ -11,7 +12,7 @@ from .pipeline import run_dropbox_batch, run_dropbox_job, run_local_batch, run_l
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="supertranscriptfc",
+        prog="voxelfc",
         description="Baixa audio, transcreve, diariza por locutor e envia os resultados.",
     )
     parser.add_argument(
@@ -64,6 +65,14 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    invoked_as = Path(sys.argv[0]).stem.lower()
+    if invoked_as == "supertranscriptfc":
+        warnings.warn(
+            "The 'supertranscriptfc' command is deprecated; use 'voxelfc' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
     parser = build_parser()
     args = parser.parse_args(argv)
 

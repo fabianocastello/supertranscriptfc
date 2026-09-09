@@ -1,4 +1,4 @@
-from supertranscriptfc.naming import build_output_stem
+from voxelfc.naming import build_output_stem
 
 
 def test_pads_episode_number_from_parent_folder_when_file_is_generic():

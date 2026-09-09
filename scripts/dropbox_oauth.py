@@ -5,7 +5,7 @@ OAuth2 do Dropbox, e atualiza o .env do projeto automaticamente.
 Diferente do botao "Generate access token" do App Console (que da' um token
 valido por poucas horas), este fluxo produz um refresh token: o SDK do
 Dropbox usa ele junto com o app key/secret para renovar o access token
-sozinho a cada chamada, entao o SuperTranscriptFC pode rodar sem supervisao
+sozinho a cada chamada, entao o VOXEL FC pode rodar sem supervisao
 por horas/dias.
 
 Uso:

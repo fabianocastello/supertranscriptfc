@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Atualiza o codigo (git pull) e ja roda o supertranscriptfc com os
+# Atualiza o codigo (git pull) e ja roda o voxelfc com os
 # argumentos passados, para nao esquecer de atualizar antes de cada uso.
 #
 # Uso: scripts/update.sh --source /caminho/ou/pasta --model-size large-v3 --language pt
@@ -16,5 +16,5 @@ if [ -f ".venv/bin/activate" ]; then
     source .venv/bin/activate
 fi
 
-echo "== Rodando: supertranscriptfc $* =="
-supertranscriptfc "$@"
+echo "== Rodando: voxelfc $* =="
+voxelfc "$@"

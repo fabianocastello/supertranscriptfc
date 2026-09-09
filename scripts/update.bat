@@ -1,5 +1,5 @@
 @echo off
-REM Atualiza o codigo (git pull) e ja roda o supertranscriptfc com os
+REM Atualiza o codigo (git pull) e ja roda o voxelfc com os
 REM argumentos passados, para nao esquecer de atualizar antes de cada uso.
 REM
 REM Uso: scripts\update.bat --source C:\caminho\ou\pasta --model-size large-v3 --language pt
@@ -16,8 +16,8 @@ if exist ".venv\Scripts\activate.bat" (
     call ".venv\Scripts\activate.bat"
 )
 
-echo == Rodando: supertranscriptfc %* ==
-supertranscriptfc %*
+echo == Rodando: voxelfc %* ==
+voxelfc %*
 exit /b %ERRORLEVEL%
 
 :fail

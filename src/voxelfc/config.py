@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -11,13 +12,45 @@ load_dotenv()
 AUDIO_EXTENSIONS = (".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".wma", ".mp4", ".mov")
 
 
+def resolve_home_dir() -> Path:
+    """Resolve the VOXEL FC state directory without abandoning legacy state."""
+    explicit = os.environ.get("VOXELFC_HOME")
+    if explicit:
+        return Path(explicit).expanduser()
+
+    legacy_explicit = os.environ.get("SUPERTRANSCRIPTFC_HOME")
+    if legacy_explicit:
+        warnings.warn(
+            "SUPERTRANSCRIPTFC_HOME is deprecated; use VOXELFC_HOME instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return Path(legacy_explicit).expanduser()
+
+    canonical = Path.home() / ".voxelfc"
+    legacy = Path.home() / ".supertranscriptfc"
+    if canonical.exists() and legacy.exists():
+        warnings.warn(
+            "Both ~/.voxelfc and ~/.supertranscriptfc exist; using ~/.voxelfc. "
+            "Set VOXELFC_HOME explicitly until the legacy directory is retired.",
+            UserWarning,
+            stacklevel=2,
+        )
+        return canonical
+    if legacy.exists():
+        warnings.warn(
+            "Using legacy ~/.supertranscriptfc state. Migrate it to ~/.voxelfc "
+            "or set VOXELFC_HOME explicitly.",
+            UserWarning,
+            stacklevel=2,
+        )
+        return legacy
+    return canonical
+
+
 @dataclass
 class Config:
-    home_dir: Path = field(
-        default_factory=lambda: Path(
-            os.environ.get("SUPERTRANSCRIPTFC_HOME") or Path.home() / ".supertranscriptfc"
-        )
-    )
+    home_dir: Path = field(default_factory=resolve_home_dir)
     dropbox_app_key: str | None = field(default_factory=lambda: os.environ.get("DROPBOX_APP_KEY"))
     dropbox_app_secret: str | None = field(default_factory=lambda: os.environ.get("DROPBOX_APP_SECRET"))
     dropbox_refresh_token: str | None = field(
@@ -70,9 +103,7 @@ class Config:
         self._pin_model_cache_dirs()
 
     def _pin_model_cache_dirs(self) -> None:
-        """Forca todo download de modelo (faster-whisper via huggingface_hub,
-        pyannote/torch) a ficar dentro de home_dir/models. Cada maquina baixa
-        e mantem sua propria copia local, sem nada compartilhado pela rede."""
+        """Keep model downloads inside this machine's VOXEL FC home directory."""
         hf_cache = self.models_dir / "huggingface"
         torch_cache = self.models_dir / "torch"
         hf_cache.mkdir(parents=True, exist_ok=True)

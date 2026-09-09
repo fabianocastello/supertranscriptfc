@@ -13,13 +13,13 @@ class FFmpegNotFoundError(RuntimeError):
 def _require_ffmpeg(binary: str) -> None:
     if shutil.which(binary) is None:
         raise FFmpegNotFoundError(
-            f"'{binary}' nao encontrado no PATH. Instale o FFmpeg antes de continuar."
+            f"'{binary}' not found in PATH. Install FFmpeg before continuing."
         )
 
 
 def convert_to_wav(input_path: Path, output_path: Path, sample_rate: int = 16000) -> Path:
-    """Converte qualquer audio/video suportado pelo FFmpeg em WAV mono PCM16,
-    formato esperado pelo faster-whisper e pelo pyannote.audio."""
+    """Converts any audio/video format supported by FFmpeg into mono PCM16
+    WAV, the format expected by faster-whisper and pyannote.audio."""
     _require_ffmpeg("ffmpeg")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     cmd = [
@@ -37,7 +37,7 @@ def convert_to_wav(input_path: Path, output_path: Path, sample_rate: int = 16000
     ]
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        raise RuntimeError(f"Falha ao converter audio com ffmpeg:\n{result.stderr}")
+        raise RuntimeError(f"Failed to convert audio with ffmpeg:\n{result.stderr}")
     return output_path
 
 
@@ -55,6 +55,6 @@ def probe_duration_seconds(path: Path) -> float:
     ]
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        raise RuntimeError(f"Falha ao inspecionar audio com ffprobe:\n{result.stderr}")
+        raise RuntimeError(f"Failed to inspect audio with ffprobe:\n{result.stderr}")
     data = json.loads(result.stdout)
     return float(data["format"]["duration"])

@@ -35,8 +35,8 @@ def _format_yaml_value(value) -> str:
 
 
 def format_front_matter(metadata: dict) -> str:
-    """Bloco YAML de front-matter, com 'system' sempre como primeiro campo
-    (a ordem de insercao do dict e' preservada)."""
+    """YAML front-matter block, with 'system' always as the first field
+    (dict insertion order is preserved)."""
     lines = ["---"]
     lines.extend(f"{key}: {_format_yaml_value(value)}" for key, value in metadata.items())
     lines.append("---")
@@ -44,8 +44,8 @@ def format_front_matter(metadata: dict) -> str:
 
 
 def write_txt(segments: list[LabeledSegment], path: Path, metadata: dict | None = None) -> Path:
-    """Texto corrido, agrupando linhas consecutivas do mesmo locutor. Se
-    'metadata' for informado, prefixa o arquivo com um front-matter YAML."""
+    """Running text, grouping consecutive lines from the same speaker. If
+    'metadata' is given, prefixes the file with a YAML front-matter block."""
     path.parent.mkdir(parents=True, exist_ok=True)
     lines: list[str] = []
     current_speaker = None

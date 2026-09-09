@@ -16,13 +16,13 @@ def _zero_pad_leading_number(name: str, width: int = EPISODE_NUMBER_WIDTH) -> st
 
 
 def build_output_stem(file_stem: str, parent_folder_name: str | None) -> str:
-    """Nome base para os arquivos de saida (.txt/.srt/.vtt).
+    """Base filename for the output files (.txt/.srt/.vtt).
 
-    Muitos audios de podcast estao salvos como 'audio.mp3' dentro de uma
-    pasta com o numero e titulo do episodio (ex: '28_20260117 Titulo').
-    Nesse caso usamos o nome da pasta em vez do nome generico do arquivo.
-    Em qualquer caso, um numero de episodio no inicio do nome e' sempre
-    zero-preenchido (ex: 28 -> 0028), para ordenar corretamente."""
+    Many podcast audio files are saved as 'audio.mp3' inside a folder named
+    with the episode number and title (e.g. '28_20260117 Title'). In that
+    case the folder name is used instead of the generic filename. Either
+    way, a leading episode number is always zero-padded (e.g. 28 -> 0028)
+    so files sort correctly."""
     base = file_stem
     if parent_folder_name and _LEADING_NUMBER_RE.match(parent_folder_name):
         base = parent_folder_name

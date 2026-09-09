@@ -12,14 +12,14 @@ def test_job_state_persists_and_reloads(tmp_path: Path):
     work_dir = tmp_path / "job1"
     state = JobState(job_id="job1", source_ref="local:/x.mp3", work_dir=work_dir)
     state.mark_done("converted")
-    state.mark_done("transcribed", transcript=[{"start": 0, "end": 1, "text": "oi"}])
+    state.mark_done("transcribed", transcript=[{"start": 0, "end": 1, "text": "hi"}])
 
     reloaded = JobState(job_id="job1", source_ref="local:/x.mp3", work_dir=work_dir)
     reloaded.load()
     assert reloaded.is_done("converted")
     assert reloaded.is_done("transcribed")
     assert not reloaded.is_done("diarized")
-    assert reloaded.data["transcript"][0]["text"] == "oi"
+    assert reloaded.data["transcript"][0]["text"] == "hi"
 
 
 def test_processed_registry_round_trip(tmp_path: Path):

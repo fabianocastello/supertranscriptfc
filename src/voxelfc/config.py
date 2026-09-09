@@ -65,13 +65,13 @@ class Config:
     model_size: str = "large-v3"
     device: str = "auto"  # auto | cpu | cuda
     compute_type: str = "auto"
-    language: str | None = None  # None = deteccao automatica
+    language: str | None = None  # None = auto-detect
 
     min_speakers: int | None = None
     max_speakers: int | None = None
 
-    min_minutes: float | None = None  # ignora audios mais curtos que isso
-    max_minutes: float | None = None  # ignora audios mais longos que isso
+    min_minutes: float | None = None  # skip audio files shorter than this
+    max_minutes: float | None = None  # skip audio files longer than this
 
     write_txt: bool = True
     write_srt: bool = True

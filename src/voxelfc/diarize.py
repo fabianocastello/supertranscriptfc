@@ -12,16 +12,16 @@ logger = logging.getLogger("voxelfc")
 class SpeakerTurn:
     start: float
     end: float
-    speaker: str  # rotulo bruto do pyannote, ex: "SPEAKER_00"
+    speaker: str  # raw pyannote label, e.g. "SPEAKER_00"
 
 
 def _load_wav_as_waveform(wav_path: Path):
-    """Le um WAV mono PCM16 (o formato que convert_to_wav sempre gera) e
-    devolve (waveform, sample_rate) prontos para o pyannote. Usa so' o
-    modulo 'wave' da biblioteca padrao para evitar depender do torchcodec,
-    que o proprio pyannote.audio/torchaudio exigiriam para abrir o arquivo
-    sozinhos e que costuma falhar por incompatibilidade com o FFmpeg do
-    sistema (visto na leno18)."""
+    """Reads a mono PCM16 WAV (the format convert_to_wav always produces)
+    and returns (waveform, sample_rate) ready for pyannote. Uses only the
+    stdlib 'wave' module to avoid depending on torchcodec, which
+    pyannote.audio/torchaudio would otherwise require to open the file
+    themselves and which tends to fail from FFmpeg version incompatibility
+    on the host system (seen on leno18)."""
     import numpy as np
     import torch
 
@@ -33,8 +33,8 @@ def _load_wav_as_waveform(wav_path: Path):
 
     if sample_width != 2:
         raise RuntimeError(
-            f"Formato de audio inesperado (sample_width={sample_width} bytes); "
-            "esperado PCM16 (o que convert_to_wav sempre gera)."
+            f"Unexpected audio format (sample_width={sample_width} bytes); "
+            "expected PCM16 (what convert_to_wav always produces)."
         )
 
     samples = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
@@ -53,12 +53,13 @@ def diarize_audio(
     min_speakers: int | None = None,
     max_speakers: int | None = None,
 ) -> list[SpeakerTurn]:
-    """Executa diarizacao com pyannote.audio. Import feito aqui dentro para nao
-    exigir torch/pyannote so' para importar o pacote."""
+    """Runs diarization with pyannote.audio. Imported here rather than at
+    module level so importing this module doesn't require torch/pyannote
+    just to load the package."""
     if not hf_token:
         raise RuntimeError(
-            "HF_TOKEN nao configurado. E' necessario um token do Hugging Face com acesso "
-            "aos modelos pyannote/speaker-diarization-3.1 e pyannote/segmentation-3.0."
+            "HF_TOKEN not configured. A Hugging Face token with access to the "
+            "pyannote/speaker-diarization-3.1 and pyannote/segmentation-3.0 models is required."
         )
 
     from pyannote.audio import Pipeline
@@ -68,10 +69,10 @@ def diarize_audio(
     if torch.cuda.is_available():
         device = "cuda"
     elif torch.backends.mps.is_available():
-        device = "mps"  # Apple Silicon (ex: MacBook Air M1)
+        device = "mps"  # Apple Silicon (e.g. MacBook Air M1)
     else:
         device = "cpu"
-    logger.info("Executando diarizacao com pyannote.audio (device=%s)", device)
+    logger.info("Running diarization with pyannote.audio (device=%s)", device)
 
     pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1", token=hf_token)
     pipeline.to(torch.device(device))
@@ -87,8 +88,8 @@ def diarize_audio(
 
     with ProgressHook() as hook:
         result = pipeline(audio_input, hook=hook, **kwargs)
-    # pyannote.audio >= 4 retorna um DiarizeOutput com o Annotation em
-    # .speaker_diarization; versoes anteriores retornam o Annotation direto.
+    # pyannote.audio >= 4 returns a DiarizeOutput with the Annotation in
+    # .speaker_diarization; earlier versions return the Annotation directly.
     annotation = getattr(result, "speaker_diarization", result)
 
     turns = [
@@ -96,5 +97,5 @@ def diarize_audio(
         for turn, _, speaker in annotation.itertracks(yield_label=True)
     ]
     n_speakers = len({t.speaker for t in turns})
-    logger.info("Diarizacao concluida: %d turnos, %d locutores detectados", len(turns), n_speakers)
+    logger.info("Diarization complete: %d turns, %d speakers detected", len(turns), n_speakers)
     return turns

@@ -5,7 +5,7 @@ import time
 
 
 def format_duration(seconds: float) -> str:
-    """Formata segundos como '2h58m32s', '55m10s' ou '32s'."""
+    """Formats seconds as '2h58m32s', '55m10s', or '32s'."""
     seconds = max(0, int(seconds))
     hours, rem = divmod(seconds, 3600)
     minutes, secs = divmod(rem, 60)
@@ -17,9 +17,9 @@ def format_duration(seconds: float) -> str:
 
 
 class ProgressPrinter:
-    """Imprime uma linha de progresso (% + ETA) que se atualiza no lugar,
-    baseado em quanto do audio (em segundos) ja foi processado. So' escreve
-    no terminal (stderr), nao vai para o arquivo de log."""
+    """Prints a progress line (% + ETA) that updates in place, based on how
+    much of the audio (in seconds) has been processed so far. Only writes to
+    the terminal (stderr); never goes into the log file."""
 
     def __init__(self, label: str, total_seconds: float, min_interval: float = 0.5):
         self.label = label

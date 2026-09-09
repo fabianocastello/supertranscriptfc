@@ -16,12 +16,12 @@ def test_pads_episode_number_already_wide_enough():
 
 
 def test_falls_back_to_file_stem_when_no_useful_parent_folder():
-    assert build_output_stem("reuniao_2026_01_10", "Gravacoes") == "reuniao_2026_01_10"
+    assert build_output_stem("meeting_2026_01_10", "Recordings") == "meeting_2026_01_10"
 
 
 def test_pads_leading_number_in_file_stem_when_no_parent_pattern():
-    assert build_output_stem("7_entrevista", "Gravacoes") == "0007_entrevista"
+    assert build_output_stem("7_interview", "Recordings") == "0007_interview"
 
 
 def test_no_parent_folder_name():
-    assert build_output_stem("42_episodio", None) == "0042_episodio"
+    assert build_output_stem("42_episode", None) == "0042_episode"

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from .diarize import SpeakerTurn
 from .transcribe import TranscriptSegment
 
-UNKNOWN_SPEAKER_LABEL = "Pessoa ?"
+UNKNOWN_SPEAKER_LABEL = "Person ?"
 
 
 @dataclass
@@ -13,7 +13,7 @@ class LabeledSegment:
     start: float
     end: float
     text: str
-    speaker: str  # rotulo amigavel, ex: "Pessoa 1"
+    speaker: str  # friendly label, e.g. "Person 1"
 
 
 def _overlap(a_start: float, a_end: float, b_start: float, b_end: float) -> float:
@@ -37,15 +37,15 @@ def assign_speakers(
     transcript_segments: list[TranscriptSegment],
     diarization_turns: list[SpeakerTurn],
 ) -> list[LabeledSegment]:
-    """Atribui a cada segmento transcrito o locutor com maior sobreposicao
-    temporal, e renomeia os rotulos brutos do pyannote (SPEAKER_00, ...) para
-    identificadores genericos e estaveis (Pessoa 1, Pessoa 2, ...) na ordem em
-    que aparecem na fala."""
+    """Assigns each transcribed segment to the speaker with the greatest
+    temporal overlap, and renames pyannote's raw labels (SPEAKER_00, ...)
+    into generic, stable identifiers (Person 1, Person 2, ...) in the order
+    they first appear in the speech."""
     friendly_names: dict[str, str] = {}
 
     def friendly(raw_label: str) -> str:
         if raw_label not in friendly_names:
-            friendly_names[raw_label] = f"Pessoa {len(friendly_names) + 1}"
+            friendly_names[raw_label] = f"Person {len(friendly_names) + 1}"
         return friendly_names[raw_label]
 
     labeled: list[LabeledSegment] = []

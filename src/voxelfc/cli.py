@@ -13,59 +13,59 @@ from .pipeline import run_dropbox_batch, run_dropbox_job, run_local_batch, run_l
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="voxelfc",
-        description="Baixa audio, transcreve, diariza por locutor e envia os resultados.",
+        description="Downloads audio, transcribes it, diarizes speakers, and delivers the results.",
     )
     parser.add_argument(
         "--source",
         required=True,
-        help="Caminho do arquivo OU pasta de origem (local ou Dropbox). Se for uma pasta, "
-        "processa todos os audios nela.",
+        help="Path to the source file OR folder (local or Dropbox). If a folder, "
+        "processes every audio file in it.",
     )
     parser.add_argument(
         "--dest",
         default=None,
-        help="Pasta de destino (local ou Dropbox). Default: mesma pasta da origem.",
+        help="Destination folder (local or Dropbox). Default: same folder as the source.",
     )
     parser.add_argument(
         "--archive",
         default=None,
-        help="Se o processamento terminar OK, move (nao copia) o audio original e as "
-        "saidas geradas para esta pasta (local ou Dropbox, conforme --local).",
+        help="If processing finishes OK, move (not copy) the original audio and the "
+        "generated outputs into this folder (local or Dropbox, per --local).",
     )
     parser.add_argument(
         "--local",
         action="store_true",
-        help="Trata --source/--dest como caminhos locais em vez de caminhos do Dropbox.",
+        help="Treat --source/--dest as local paths instead of Dropbox paths.",
     )
     parser.add_argument(
         "--recursive",
         action="store_true",
-        help="Ao processar uma pasta, tambem desce em subpastas (util para series de podcast "
-        "com uma subpasta por episodio).",
+        help="When processing a folder, also descend into subfolders (useful for "
+        "podcast series with one subfolder per episode).",
     )
-    parser.add_argument("--model-size", default="large-v3", help="Modelo faster-whisper (default: large-v3).")
+    parser.add_argument("--model-size", default="large-v3", help="faster-whisper model (default: large-v3).")
     parser.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda"])
     parser.add_argument("--compute-type", default="auto")
-    parser.add_argument("--language", default=None, help="Codigo do idioma (ex: pt). Default: deteccao automatica.")
+    parser.add_argument("--language", default=None, help="Language code (e.g. pt). Default: auto-detect.")
     parser.add_argument("--min-speakers", type=int, default=None)
     parser.add_argument("--max-speakers", type=int, default=None)
     parser.add_argument(
         "--min-minutes",
         type=float,
         default=None,
-        help="Ignora audios com duracao menor que isso (em minutos).",
+        help="Skip audio files shorter than this (in minutes).",
     )
     parser.add_argument(
         "--max-minutes",
         type=float,
         default=None,
-        help="Ignora audios com duracao maior que isso (em minutos).",
+        help="Skip audio files longer than this (in minutes).",
     )
-    parser.add_argument("--vtt", action="store_true", help="Tambem gerar arquivo .vtt.")
-    parser.add_argument("--no-txt", action="store_true", help="Nao gerar arquivo .txt.")
-    parser.add_argument("--no-srt", action="store_true", help="Nao gerar arquivo .srt.")
-    parser.add_argument("--keep-temp", action="store_true", help="Nao apagar arquivos temporarios ao final.")
-    parser.add_argument("--force", action="store_true", help="Reprocessar mesmo se ja concluido anteriormente.")
+    parser.add_argument("--vtt", action="store_true", help="Also generate a .vtt file.")
+    parser.add_argument("--no-txt", action="store_true", help="Don't generate a .txt file.")
+    parser.add_argument("--no-srt", action="store_true", help="Don't generate a .srt file.")
+    parser.add_argument("--keep-temp", action="store_true", help="Don't delete temporary files at the end.")
+    parser.add_argument("--force", action="store_true", help="Reprocess even if already completed before.")
     parser.add_argument("--verbose", action="store_true")
     return parser
 
@@ -102,8 +102,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if not config.hf_token:
         logger.error(
-            "HF_TOKEN nao configurado (necessario para a diarizacao com pyannote.audio). "
-            "Preencha-o no .env antes de rodar (veja .env.example)."
+            "HF_TOKEN not configured (required for diarization with pyannote.audio). "
+            "Set it in .env before running (see .env.example)."
         )
         return 1
 
@@ -120,21 +120,24 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 outputs = run_local_job(config, source_path, dest_dir, archive_dir=archive_dir)
                 if outputs:
-                    logger.info("Concluido. Arquivos gerados: %s", [str(p) for p in outputs])
+                    logger.info("Done. Files generated: %s", [str(p) for p in outputs])
                 else:
-                    logger.info("Nada a fazer (ja processado, em andamento em outra maquina, ou fora dos limites de duracao configurados).")
+                    logger.info(
+                        "Nothing to do (already processed, in progress on another machine, "
+                        "or outside the configured duration limits)."
+                    )
         else:
             if not args.source.startswith("/"):
                 logger.error(
-                    "'--source %s' nao parece um caminho do Dropbox (precisa comecar com '/'). "
-                    "Se e' um arquivo local, use --local.",
+                    "'--source %s' doesn't look like a Dropbox path (must start with '/'). "
+                    "If it's a local file, use --local.",
                     args.source,
                 )
                 return 1
             if not config.has_dropbox_credentials:
                 logger.error(
                     "DROPBOX_APP_KEY / DROPBOX_APP_SECRET / DROPBOX_REFRESH_TOKEN "
-                    "nao configurados (veja .env.example)."
+                    "not configured (see .env.example)."
                 )
                 return 1
             from .dropbox_client import DropboxClient
@@ -157,24 +160,27 @@ def main(argv: list[str] | None = None) -> int:
                     config, client, args.source, args.dest, archive_folder=args.archive
                 )
                 if outputs:
-                    logger.info("Concluido. Arquivos enviados ao Dropbox: %s", outputs)
+                    logger.info("Done. Files uploaded to Dropbox: %s", outputs)
                 else:
-                    logger.info("Nada a fazer (ja processado, em andamento em outra maquina, ou fora dos limites de duracao configurados).")
+                    logger.info(
+                        "Nothing to do (already processed, in progress on another machine, "
+                        "or outside the configured duration limits)."
+                    )
         return 0
     except Exception:
-        logger.exception("Falha ao processar %s", args.source)
+        logger.exception("Failed to process %s", args.source)
         return 1
 
 
 def _log_batch_summary(logger, summary: dict[str, list]) -> None:
     logger.info(
-        "Lote concluido: %d processado(s), %d pulado(s) (ja concluidos), %d com falha.",
+        "Batch complete: %d processed, %d skipped (already done), %d failed.",
         len(summary["processed"]),
         len(summary["skipped"]),
         len(summary["failed"]),
     )
     if summary["failed"]:
-        logger.warning("Arquivos com falha: %s", summary["failed"])
+        logger.warning("Files with failures: %s", summary["failed"])
 
 
 if __name__ == "__main__":

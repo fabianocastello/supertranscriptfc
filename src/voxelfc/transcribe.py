@@ -12,11 +12,11 @@ logger = logging.getLogger("voxelfc")
 
 
 def _ensure_cuda_libs_on_path() -> None:
-    """O ctranslate2 (motor do faster-whisper) carrega libcublas/libcudnn via
-    dlopen em runtime; o wheel do torch nao expõe essas libs no PATH padrao.
-    Se os pacotes nvidia-cublas-cu12/nvidia-cudnn-cu12 estiverem instalados
-    (extra 'cuda'), adiciona seus diretorios de lib ao LD_LIBRARY_PATH antes
-    de importar o backend, para nao exigir nenhuma configuracao manual."""
+    """ctranslate2 (faster-whisper's backend) dlopens libcublas/libcudnn at
+    runtime; the torch wheel doesn't expose these libs on the default PATH.
+    If the nvidia-cublas-cu12/nvidia-cudnn-cu12 packages are installed (the
+    'cuda' extra), adds their lib directories to LD_LIBRARY_PATH before
+    importing the backend, so no manual configuration is required."""
     lib_dirs = []
     for module_name in ("nvidia.cublas.lib", "nvidia.cudnn.lib"):
         try:
@@ -47,8 +47,8 @@ def _pick_device_and_compute_type(device: str, compute_type: str) -> tuple[str, 
     if device != "auto":
         resolved_device = device
     else:
-        # ctranslate2 (usado pelo faster-whisper) so' suporta CPU e CUDA, sem
-        # MPS: em Apple Silicon (ex: MacBook Air M1) o resultado cai para CPU.
+        # ctranslate2 (used by faster-whisper) only supports CPU and CUDA,
+        # no MPS: on Apple Silicon (e.g. MacBook Air M1) this falls back to CPU.
         try:
             import torch
 

@@ -19,21 +19,21 @@ from .transcribe import transcribe_audio
 
 logger = logging.getLogger("voxelfc")
 
-# Um processamento longo (audio de varias horas em CPU) pode legitimamente
-# levar mais de um dia; alem disso consideramos o lock abandonado (ex: a
-# maquina foi desligada no meio do processo) e deixamos outra maquina assumir.
+# A long job (a multi-hour audio file on CPU) can legitimately take more
+# than a day; beyond that we consider the lock abandoned (e.g. the machine
+# was shut down mid-job) and let another machine pick it up.
 LOCK_STALE_AFTER = timedelta(hours=36)
 
 
 def _make_lock_content() -> str:
     hostname = socket.gethostname()
     started_at = datetime.now().isoformat()
-    return f"Processando por: {hostname}\nIniciado em: {started_at}\n"
+    return f"Processing on: {hostname}\nStarted at: {started_at}\n"
 
 
 def _is_lock_stale(lock_content: str) -> bool:
     try:
-        iso_timestamp = lock_content.splitlines()[1].split("Iniciado em: ", 1)[1]
+        iso_timestamp = lock_content.splitlines()[1].split("Started at: ", 1)[1]
         locked_at = datetime.fromisoformat(iso_timestamp)
     except (IndexError, ValueError):
         return True
@@ -41,8 +41,8 @@ def _is_lock_stale(lock_content: str) -> bool:
 
 
 def _local_target(source: Path, dest_dir: Path | None) -> tuple[str, Path, Path, Path]:
-    """Calcula, para um audio local, o nome base de saida e os caminhos onde
-    o transcript e o lock (se existirem) estariam no destino."""
+    """For a local audio file, computes the output base name and the paths
+    where the transcript and lock (if any) would live at the destination."""
     source = source.resolve()
     resolved_dest_dir = (dest_dir or source.parent).resolve()
     stem = build_output_stem(source.stem, source.parent.name)
@@ -52,8 +52,9 @@ def _local_target(source: Path, dest_dir: Path | None) -> tuple[str, Path, Path,
 
 
 def _dropbox_target(source_path: str, dest_folder: str | None) -> tuple[str, str, str, str]:
-    """Calcula, para um audio do Dropbox, o nome base de saida e os caminhos
-    remotos onde o transcript e o lock (se existirem) estariam no destino."""
+    """For a Dropbox audio file, computes the output base name and the
+    remote paths where the transcript and lock (if any) would live at the
+    destination."""
     source_purepath = PurePosixPath(source_path)
     stem = build_output_stem(source_purepath.stem, source_purepath.parent.name)
     resolved_dest_folder = dest_folder or str(source_purepath.parent)
@@ -71,12 +72,12 @@ def process_file(
     work_dir: Path,
     source_ref: str,
 ) -> list[Path]:
-    """Roda o pipeline completo (conversao -> transcricao -> diarizacao ->
-    merge -> geracao de saidas) sobre um arquivo de audio ja disponivel em
-    disco. Retorna a lista de arquivos de saida gerados em work_dir/output.
+    """Runs the full pipeline (convert -> transcribe -> diarize -> merge ->
+    generate outputs) on an audio file already available on disk. Returns
+    the list of output files generated in work_dir/output.
 
-    E' resumivel: cada etapa e' marcada em progress.json dentro de work_dir,
-    e reexecucoes pulam etapas ja concluidas (a menos que config.force)."""
+    Resumable: each stage is recorded in progress.json inside work_dir, and
+    re-runs skip stages already completed (unless config.force)."""
     job_id = compute_job_id(source_ref)
     state = JobState(job_id=job_id, source_ref=source_ref, work_dir=work_dir)
     state.load()
@@ -89,7 +90,7 @@ def process_file(
 
     input_size_mb = input_path.stat().st_size / 1_000_000
     logger.info(
-        "[%s] Arquivo de origem: %s (%.1f MB, modificado em %s)",
+        "[%s] Source file: %s (%.1f MB, modified %s)",
         job_id,
         input_path.name,
         input_size_mb,
@@ -101,16 +102,16 @@ def process_file(
         convert_to_wav(input_path, wav_path)
         state.mark_done("converted", converted_seconds=time.monotonic() - stage_start)
     else:
-        logger.info("[%s] Conversao ja concluida, pulando.", job_id)
+        logger.info("[%s] Conversion already done, skipping.", job_id)
     conversion_seconds = state.data.get("converted_seconds", 0.0)
 
     audio_duration = probe_duration_seconds(wav_path)
-    logger.info("[%s] Duracao do audio: %s", job_id, format_duration(audio_duration))
+    logger.info("[%s] Audio duration: %s", job_id, format_duration(audio_duration))
 
     audio_minutes = audio_duration / 60
     if config.min_minutes is not None and audio_minutes < config.min_minutes:
         logger.info(
-            "[%s] Audio mais curto que o minimo configurado (%s < %.1f min), ignorando.",
+            "[%s] Audio shorter than the configured minimum (%s < %.1f min), skipping.",
             job_id,
             format_duration(audio_duration),
             config.min_minutes,
@@ -118,7 +119,7 @@ def process_file(
         return []
     if config.max_minutes is not None and audio_minutes > config.max_minutes:
         logger.info(
-            "[%s] Audio mais longo que o maximo configurado (%s > %.1f min), ignorando.",
+            "[%s] Audio longer than the configured maximum (%s > %.1f min), skipping.",
             job_id,
             format_duration(audio_duration),
             config.max_minutes,
@@ -144,7 +145,7 @@ def process_file(
             transcribed_seconds=transcription_seconds,
         )
     else:
-        logger.info("[%s] Transcricao ja concluida, pulando.", job_id)
+        logger.info("[%s] Transcription already done, skipping.", job_id)
         transcript_data = state.data["transcript"]
         detected_language = state.data.get("language")
         detected_language_probability = state.data.get("language_probability")
@@ -162,7 +163,7 @@ def process_file(
         turns_data = [{"start": t.start, "end": t.end, "speaker": t.speaker} for t in turns]
         state.mark_done("diarized", turns=turns_data, diarized_seconds=diarization_seconds)
     else:
-        logger.info("[%s] Diarizacao ja concluida, pulando.", job_id)
+        logger.info("[%s] Diarization already done, skipping.", job_id)
         turns_data = state.data["turns"]
     diarization_seconds = state.data.get("diarized_seconds", 0.0)
 
@@ -216,7 +217,7 @@ def process_file(
         output_paths.append(write_vtt(labeled_segments, output_dir / f"{output_stem}.voxcelfc.vtt"))
 
     state.mark_done("outputs_written", outputs=[str(p) for p in output_paths])
-    logger.info("[%s] Saidas geradas: %s", job_id, [p.name for p in output_paths])
+    logger.info("[%s] Outputs generated: %s", job_id, [p.name for p in output_paths])
     return output_paths
 
 
@@ -231,22 +232,22 @@ def _move_file_local(src: Path, dest_dir: Path) -> Path:
 
 def cleanup_work_dir(work_dir: Path, keep_temp: bool) -> None:
     if keep_temp:
-        logger.info("keep_temp ativo, mantendo %s", work_dir)
+        logger.info("keep_temp enabled, keeping %s", work_dir)
         return
-    logger.info("Limpando temporarios: %s", work_dir)
+    logger.info("Cleaning up temporary files: %s", work_dir)
     shutil.rmtree(work_dir, ignore_errors=True)
 
 
 def run_local_job(
     config: Config, source: Path, dest_dir: Path | None, archive_dir: Path | None = None
 ) -> list[Path]:
-    """Processa um arquivo de audio local e copia as saidas para dest_dir
-    (ou para a pasta do arquivo de origem, se dest_dir nao for informado).
+    """Processes a local audio file and copies the outputs to dest_dir (or
+    to the source file's own folder, if dest_dir isn't given).
 
-    Se archive_dir for informado e o processamento terminar com sucesso, o
-    audio original E os arquivos gerados sao movidos (nao copiados) para
-    essa pasta - util para "esvaziar" a pasta monitorada com o tempo. Se
-    archive_dir nao for informado, o arquivo de origem nunca e' removido."""
+    If archive_dir is given and processing finishes successfully, the
+    original audio AND the generated files are moved (not copied) into that
+    folder - useful for "emptying out" a monitored folder over time. If
+    archive_dir isn't given, the source file is never removed."""
     config.ensure_dirs()
     output_stem, dest_dir, transcript_path, _lock_path = _local_target(source, dest_dir)
     source = source.resolve()
@@ -255,7 +256,7 @@ def run_local_job(
     registry = ProcessedRegistry(config.state_file)
 
     if transcript_path.exists() and not config.force:
-        logger.info("Transcricao ja existe (%s), pulando: %s", transcript_path.name, source)
+        logger.info("Transcript already exists (%s), skipping: %s", transcript_path.name, source)
         return []
 
     work_dir = config.tmp_dir / job_id
@@ -297,13 +298,13 @@ def run_dropbox_job(
     dest_folder: str | None,
     archive_folder: str | None = None,
 ) -> list[str]:
-    """Processa um arquivo de audio no Dropbox: download -> pipeline -> upload
-    das saidas -> limpeza dos temporarios. dest_folder default = mesma pasta
-    do arquivo de origem.
+    """Processes a Dropbox audio file: download -> pipeline -> upload
+    outputs -> clean up temporary files. dest_folder defaults to the same
+    folder as the source file.
 
-    Se archive_folder for informado e o processamento terminar com sucesso,
-    o audio original E as saidas recem-enviadas sao movidas (nao copiadas)
-    para essa pasta no proprio Dropbox."""
+    If archive_folder is given and processing finishes successfully, the
+    original audio AND the freshly uploaded outputs are moved (not copied)
+    into that folder on Dropbox itself."""
     config.ensure_dirs()
     source_ref = f"dropbox:{source_path}"
     job_id = compute_job_id(source_ref)
@@ -314,21 +315,21 @@ def run_dropbox_job(
     )
 
     if not config.force and dropbox_client.file_exists(transcript_remote_path):
-        logger.info("Transcricao ja existe (%s), pulando: %s", transcript_remote_path, source_path)
+        logger.info("Transcript already exists (%s), skipping: %s", transcript_remote_path, source_path)
         return []
 
     if not config.force:
         lock_content = dropbox_client.read_text_file(lock_remote_path)
         if lock_content and not _is_lock_stale(lock_content):
             logger.info(
-                "Ja esta sendo processado por outra maquina (%s), pulando: %s",
+                "Already being processed by another machine (%s), skipping: %s",
                 lock_content,
                 source_path,
             )
             return []
         if lock_content:
             logger.warning(
-                "Lock antigo encontrado (%s) - assumindo abandonado e prosseguindo: %s",
+                "Stale lock found (%s) - assuming abandoned and proceeding: %s",
                 lock_content,
                 source_path,
             )
@@ -345,7 +346,7 @@ def run_dropbox_job(
             dropbox_client.download_file(source_path, local_input)
             state.mark_done("downloaded")
         else:
-            logger.info("[%s] Download ja concluido, pulando.", job_id)
+            logger.info("[%s] Download already done, skipping.", job_id)
 
         output_paths = process_file(
             config, input_path=local_input, output_stem=stem, work_dir=work_dir, source_ref=source_ref
@@ -360,7 +361,7 @@ def run_dropbox_job(
             state.mark_done("uploaded", uploaded=uploaded)
         else:
             uploaded = state.data["uploaded"]
-            logger.info("[%s] Upload ja concluido, pulando.", job_id)
+            logger.info("[%s] Upload already done, skipping.", job_id)
 
         if archive_folder is not None and uploaded:
             archive_folder = archive_folder.rstrip("/") if archive_folder != "/" else archive_folder
@@ -386,7 +387,7 @@ def run_dropbox_job(
                 logger.info("[%s] Audio and outputs moved to: %s", job_id, archive_folder)
             else:
                 uploaded = state.data["archived"]
-                logger.info("[%s] Arquivamento ja concluido, pulando.", job_id)
+                logger.info("[%s] Archiving already done, skipping.", job_id)
 
         registry.mark_processed(job_id, source_ref, uploaded)
         cleanup_work_dir(work_dir, config.keep_temp)
@@ -410,9 +411,9 @@ def run_local_batch(
     recursive: bool = False,
     archive_dir: Path | None = None,
 ) -> dict[str, list]:
-    """Processa todos os arquivos de audio de um diretorio local. Continua
-    para o proximo arquivo mesmo se um deles falhar; retorna um resumo com
-    os arquivos processados, pulados (ja concluidos) e com erro."""
+    """Processes every audio file in a local directory. Continues to the
+    next file even if one fails; returns a summary of files processed,
+    skipped (already done), and failed."""
     source_dir = source_dir.resolve()
     files = _iter_local_audio_files(source_dir, recursive)
 
@@ -439,11 +440,11 @@ def run_local_batch(
 
     summary: dict[str, list] = {"processed": [], "skipped": [], "failed": []}
     for i, audio_path in enumerate(to_work_on, start=1):
-        logger.info("--- Arquivo %d/%d: %s ---", i, len(to_work_on), audio_path.name)
+        logger.info("--- File %d/%d: %s ---", i, len(to_work_on), audio_path.name)
         try:
             outputs = run_local_job(config, audio_path, dest_dir, archive_dir=archive_dir)
         except Exception:
-            logger.exception("Falha ao processar %s, continuando com os demais.", audio_path)
+            logger.exception("Failed to process %s, continuing with the rest.", audio_path)
             summary["failed"].append(str(audio_path))
             continue
         if outputs:
@@ -461,9 +462,9 @@ def run_dropbox_batch(
     recursive: bool = False,
     archive_folder: str | None = None,
 ) -> dict[str, list]:
-    """Processa todos os arquivos de audio de uma pasta do Dropbox. Continua
-    para o proximo arquivo mesmo se um deles falhar; retorna um resumo com
-    os arquivos processados, pulados (ja concluidos) e com erro."""
+    """Processes every audio file in a Dropbox folder. Continues to the
+    next file even if one fails; returns a summary of files processed,
+    skipped (already done), and failed."""
     files = dropbox_client.list_audio_files(source_folder, recursive=recursive)
 
     to_work_on: list[str] = []
@@ -492,13 +493,13 @@ def run_dropbox_batch(
 
     summary: dict[str, list] = {"processed": [], "skipped": [], "failed": []}
     for i, audio_path in enumerate(to_work_on, start=1):
-        logger.info("--- Arquivo %d/%d: %s ---", i, len(to_work_on), audio_path)
+        logger.info("--- File %d/%d: %s ---", i, len(to_work_on), audio_path)
         try:
             outputs = run_dropbox_job(
                 config, dropbox_client, audio_path, dest_folder, archive_folder=archive_folder
             )
         except Exception:
-            logger.exception("Falha ao processar %s, continuando com os demais.", audio_path)
+            logger.exception("Failed to process %s, continuing with the rest.", audio_path)
             summary["failed"].append(audio_path)
             continue
         if outputs:

@@ -22,7 +22,7 @@ _registry_lock = threading.Lock()
 
 
 def compute_job_id(source_ref: str) -> str:
-    """ID estavel derivado do caminho de origem (Dropbox ou local)."""
+    """Stable ID derived from the source path (Dropbox or local)."""
     return hashlib.sha256(source_ref.encode("utf-8")).hexdigest()[:16]
 
 
@@ -71,8 +71,8 @@ class JobState:
 
 
 class ProcessedRegistry:
-    """Registro persistente (fora do tmp_dir) dos arquivos ja concluidos,
-    para nao reprocessar mesmo depois da limpeza dos temporarios."""
+    """Persistent registry (outside tmp_dir) of files already completed, so
+    they aren't reprocessed even after their temporary files are cleaned up."""
 
     def __init__(self, state_file: Path):
         self.state_file = state_file

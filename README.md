@@ -5,7 +5,9 @@ locutor (`Pessoa 1`, `Pessoa 2`, ...) e envia `.transcriptFC.txt` / `.srt` /
 `.transcriptFC.vtt` de volta ao Dropbox.
 
 `voxelfc` e o nome tecnico do produto. Durante a migracao, o comando legado
-`supertranscriptfc` continua disponivel como alias depreciado.
+`supertranscriptfc` continua disponivel como alias depreciado. Os scripts
+`update.sh`/`update.bat` reinstalam automaticamente o pacote apos o `git pull`,
+pois uma troca de pacote ou entry point exige atualizar o ambiente virtual.
 
 Cada maquina onde o projeto for instalado roda **de forma totalmente
 independente**: ambiente virtual proprio, modelos proprios baixados e

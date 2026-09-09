@@ -57,8 +57,9 @@ rmdir /s /q "%TMP_EXTRACT%"
 
 if exist ".venv\Scripts\activate.bat" (
     call ".venv\Scripts\activate.bat"
-    echo == Reinstalando dependencias (caso tenham mudado) ==
-    pip install -q -e ".[dropbox,transcribe,diarize]" >nul 2>&1
+    echo == Reinstalando dependencias e entry points atualizados ==
+    python -m pip install -q -e ".[dropbox,transcribe,diarize]" >nul 2>&1
+    if errorlevel 1 goto :fail
 )
 
 echo == Rodando: voxelfc %* ==

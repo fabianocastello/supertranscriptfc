@@ -16,5 +16,15 @@ if [ -f ".venv/bin/activate" ]; then
     source .venv/bin/activate
 fi
 
+# O pull pode alterar pyproject.toml, o nome do pacote ou os entry points.
+# Reinstalar o pacote atualiza .venv/bin/voxelfc e o alias legado.
+echo "== Instalando codigo atualizado no ambiente virtual =="
+python -m pip install -q -e .
+
+if ! command -v voxelfc >/dev/null 2>&1; then
+    echo "Executavel voxelfc nao encontrado apos a instalacao." >&2
+    exit 1
+fi
+
 echo "== Rodando: voxelfc $* =="
 voxelfc "$@"

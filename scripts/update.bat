@@ -16,6 +16,18 @@ if exist ".venv\Scripts\activate.bat" (
     call ".venv\Scripts\activate.bat"
 )
 
+REM O pull pode alterar pyproject.toml, o nome do pacote ou os entry points.
+REM Reinstalar o pacote atualiza voxelfc.exe e o alias legado.
+echo == Instalando codigo atualizado no ambiente virtual ==
+python -m pip install -q -e .
+if errorlevel 1 goto :fail
+
+where voxelfc >nul 2>&1
+if errorlevel 1 (
+    echo Executavel voxelfc nao encontrado apos a instalacao.
+    goto :fail
+)
+
 echo == Rodando: voxelfc %* ==
 voxelfc %*
 exit /b %ERRORLEVEL%

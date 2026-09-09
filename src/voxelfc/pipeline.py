@@ -241,7 +241,7 @@ def process_file(
 
     total_seconds = conversion_seconds + transcription_seconds + diarization_seconds
     metadata = {
-        "system": "VOXEL FC",
+        "system": "VoxelFC 1.0",
         "audio_file": input_path.name,
         "processed_date": datetime.now().strftime("%Y-%m-%d"),
         "running_on": socket.gethostname(),

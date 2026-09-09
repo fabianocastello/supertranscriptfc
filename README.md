@@ -5,9 +5,10 @@ locutor (`Pessoa 1`, `Pessoa 2`, ...) e envia `.transcriptFC.txt` / `.srt` /
 `.transcriptFC.vtt` de volta ao Dropbox.
 
 `voxelfc` e o nome tecnico do produto. Durante a migracao, o comando legado
-`supertranscriptfc` continua disponivel como alias depreciado. Os scripts
-`update.sh`/`update.bat` reinstalam automaticamente o pacote apos o `git pull`,
-pois uma troca de pacote ou entry point exige atualizar o ambiente virtual.
+`supertranscriptfc` continua disponivel como alias depreciado. O
+`scripts/update.sh` faz `git pull`, reexecuta a si proprio quando o proprio
+arquivo foi atualizado e usa diretamente `.venv/bin/python` e
+`.venv/bin/voxelfc`, evitando conflitos com Miniconda ou outro Python no PATH.
 
 Cada maquina onde o projeto for instalado roda **de forma totalmente
 independente**: ambiente virtual proprio, modelos proprios baixados e

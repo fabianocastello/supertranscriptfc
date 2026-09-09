@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import platform
 from dataclasses import dataclass
 from importlib import import_module
 from pathlib import Path
@@ -9,6 +10,36 @@ from pathlib import Path
 from .progress import ProgressPrinter
 
 logger = logging.getLogger("voxelfc")
+
+# faster-whisper's ctranslate2 backend only supports CPU/CUDA, not Metal, so
+# transcription on Apple Silicon normally falls back to CPU. mlx-whisper
+# (Apple's own MLX framework) runs the model on the GPU/Neural Engine
+# instead and is reportedly 2-4x faster there - used automatically when
+# installed on macOS arm64, with a safe fallback to faster-whisper on any
+# failure (this path is NOT tested on real Apple Silicon hardware yet).
+MLX_MODEL_REPOS = {
+    "tiny": "mlx-community/whisper-tiny-mlx",
+    "base": "mlx-community/whisper-base-mlx",
+    "small": "mlx-community/whisper-small-mlx",
+    "medium": "mlx-community/whisper-medium-mlx",
+    "large-v2": "mlx-community/whisper-large-v2-mlx",
+    "large-v3": "mlx-community/whisper-large-v3-mlx",
+    "large-v3-turbo": "mlx-community/whisper-large-v3-turbo",
+}
+
+
+def _is_apple_silicon() -> bool:
+    return platform.system() == "Darwin" and platform.machine() == "arm64"
+
+
+def _mlx_available() -> bool:
+    if not _is_apple_silicon():
+        return False
+    try:
+        import_module("mlx_whisper")
+        return True
+    except ImportError:
+        return False
 
 # Whisper language codes that use a non-Latin script. When auto-detected
 # (i.e. --language wasn't forced), these are translated straight to English
@@ -55,6 +86,74 @@ class TranscriptSegment:
     text: str
 
 
+def _transcribe_with_mlx(
+    wav_path: Path, model_size: str, language: str | None
+) -> tuple[list[TranscriptSegment], str, float | None, bool]:
+    """Transcribes using mlx-whisper (Apple's MLX framework), which runs on
+    the GPU/Neural Engine instead of CPU on Apple Silicon. Raises on any
+    failure so the caller falls back to faster-whisper.
+
+    UNTESTED on real Apple Silicon hardware as of this writing - this
+    session has no access to a Mac. Needs validation before being trusted;
+    the caller wraps this in a try/except specifically so a bug here can't
+    break transcription, only forfeit the speedup.
+
+    Unlike faster-whisper, mlx_whisper.transcribe() has no cheap
+    detection-only mode (no lazy generator to leave unconsumed) - a
+    language=None call already runs the full transcription. So the common
+    case (no forced language, Latin script) costs a single pass, but a
+    forced --language or a non-Latin auto-translate currently costs two
+    full passes here (one to learn the real language, one for the actual
+    output) - a possible follow-up optimization if mlx_whisper turns out to
+    expose a lighter-weight detection call."""
+    import mlx_whisper
+
+    model_repo = MLX_MODEL_REPOS.get(model_size, model_size)  # a full HF repo can be passed directly
+    logger.info("Transcribing with mlx-whisper (model=%s, device=Apple GPU/Neural Engine)", model_repo)
+
+    detect_result = mlx_whisper.transcribe(
+        str(wav_path), path_or_hf_repo=model_repo, language=None, task="transcribe"
+    )
+    detected_language = detect_result.get("language")
+    # mlx_whisper doesn't expose a detection confidence the way
+    # faster-whisper's language_probability does.
+    detected_language_probability = None
+
+    translated_to_english = False
+    if language is not None:
+        logger.info(
+            "Forced language for transcription: %s (actual detected language: %s)",
+            language,
+            detected_language,
+        )
+        result = (
+            detect_result
+            if language == detected_language
+            else mlx_whisper.transcribe(
+                str(wav_path), path_or_hf_repo=model_repo, language=language, task="transcribe"
+            )
+        )
+    elif detected_language in NON_LATIN_LANGUAGES:
+        translated_to_english = True
+        logger.info(
+            "Detected language %s uses a non-Latin script; translating to English instead of transcribing.",
+            detected_language,
+        )
+        result = mlx_whisper.transcribe(
+            str(wav_path), path_or_hf_repo=model_repo, language=detected_language, task="translate"
+        )
+    else:
+        logger.info("Detected language: %s", detected_language)
+        result = detect_result
+
+    segments = [
+        TranscriptSegment(start=seg["start"], end=seg["end"], text=seg["text"].strip())
+        for seg in result.get("segments", [])
+    ]
+    logger.info("Transcription complete: %d segments", len(segments))
+    return segments, detected_language, detected_language_probability, translated_to_english
+
+
 def _pick_device_and_compute_type(device: str, compute_type: str) -> tuple[str, str]:
     if device != "auto":
         resolved_device = device
@@ -76,12 +175,12 @@ def _pick_device_and_compute_type(device: str, compute_type: str) -> tuple[str, 
     return resolved_device, resolved_compute_type
 
 
-def transcribe_audio(
+def _transcribe_with_faster_whisper(
     wav_path: Path,
-    model_size: str = "large-v3",
-    device: str = "auto",
-    compute_type: str = "auto",
-    language: str | None = None,
+    model_size: str,
+    device: str,
+    compute_type: str,
+    language: str | None,
 ) -> tuple[list[TranscriptSegment], str, float | None, bool]:
     """Transcribes a WAV file with faster-whisper. faster_whisper is imported
     here rather than at module level so importing this module doesn't
@@ -170,3 +269,30 @@ def transcribe_audio(
 
     logger.info("Transcription complete: %d segments", len(segments))
     return segments, detected_language, detected_language_probability, translated_to_english
+
+
+def transcribe_audio(
+    wav_path: Path,
+    model_size: str = "large-v3",
+    device: str = "auto",
+    compute_type: str = "auto",
+    language: str | None = None,
+) -> tuple[list[TranscriptSegment], str, float | None, bool]:
+    """Transcribes a WAV file, returning (segments, detected_language,
+    detected_language_probability, translated_to_english).
+
+    On macOS/Apple Silicon with mlx-whisper installed, uses that instead of
+    faster-whisper (GPU/Neural Engine instead of CPU-only, reportedly
+    2-4x faster there) - falling back to faster-whisper automatically if
+    mlx-whisper raises anything, so a problem with the MLX path costs the
+    speedup, not correctness. device/compute_type are ignored on the MLX
+    path (mlx-whisper always uses the GPU)."""
+    if device == "auto" and compute_type == "auto" and _mlx_available():
+        try:
+            return _transcribe_with_mlx(wav_path, model_size, language)
+        except Exception:
+            logger.exception(
+                "mlx-whisper failed, falling back to faster-whisper (CPU) for this file."
+            )
+
+    return _transcribe_with_faster_whisper(wav_path, model_size, device, compute_type, language)

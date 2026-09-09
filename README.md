@@ -33,6 +33,11 @@ Prerequisites on any machine: Python 3.10+ and FFmpeg in PATH.
 - On the MacBook Air M1, diarization (`pyannote.audio`/torch) uses MPS
   acceleration automatically when available; transcription
   (`faster-whisper`) runs on CPU, since `ctranslate2` doesn't support MPS.
+- On Apple Silicon (arm64), the installer also adds `mlx-whisper`, which
+  transcribes on the GPU/Neural Engine instead (reportedly 2-4x faster than
+  CPU there) and is used automatically whenever installed, falling back to
+  `faster-whisper` on CPU if it fails for any reason. This path has not yet
+  been validated on real Apple Silicon hardware.
 
 ### Windows (ps20)
 

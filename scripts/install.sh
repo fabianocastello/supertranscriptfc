@@ -45,6 +45,10 @@ python -m pip install --upgrade pip -q
 EXTRAS="dropbox,transcribe,diarize"
 if [ "$OS" = "Darwin" ]; then
     echo "macOS detected: torch already runs on CPU/MPS, no special index needed."
+    if [ "$(uname -m)" = "arm64" ]; then
+        echo "Apple Silicon detected: adding mlx-whisper (GPU/Neural Engine transcription)."
+        EXTRAS="${EXTRAS},mlx"
+    fi
 elif command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi >/dev/null 2>&1; then
     echo "NVIDIA GPU detected: installing with CUDA support."
     EXTRAS="${EXTRAS},cuda"

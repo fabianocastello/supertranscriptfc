@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import shutil
 import socket
 import time
@@ -616,6 +617,26 @@ def _iter_local_audio_files(source_dir: Path, recursive: bool) -> list[Path]:
     return sorted(files)
 
 
+def _remove_empty_dirs_local(root: Path) -> list[Path]:
+    """Removes empty subdirectories under root, bottom-up, leaving root
+    itself in place even if it ends up empty - used after --archive moves
+    files out of a folder tree, so processed subfolders (e.g. one per
+    podcast episode with --recursive) don't linger behind empty."""
+    removed = []
+    for dirpath, _dirnames, _filenames in os.walk(root, topdown=False):
+        current = Path(dirpath)
+        if current == root:
+            continue
+        try:
+            if not any(current.iterdir()):
+                current.rmdir()
+                removed.append(current)
+                logger.info("Removed empty folder: %s", current)
+        except OSError:
+            pass
+    return removed
+
+
 def run_local_batch(
     config: Config,
     source_dir: Path,
@@ -670,6 +691,10 @@ def run_local_batch(
             summary["processed"].append(str(audio_path))
         else:
             summary["skipped"].append(str(audio_path))
+
+    if archive_dir is not None:
+        _remove_empty_dirs_local(source_dir)
+
     return summary
 
 
@@ -739,4 +764,8 @@ def run_dropbox_batch(
             summary["processed"].append(audio_path)
         else:
             summary["skipped"].append(audio_path)
+
+    if archive_folder is not None:
+        dropbox_client.remove_empty_subfolders(source_folder)
+
     return summary

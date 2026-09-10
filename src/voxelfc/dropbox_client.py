@@ -131,3 +131,43 @@ class DropboxClient:
             self.dbx.files_delete_v2(dropbox_path)
         except ApiError:
             pass  # no longer exists / already removed
+
+    def remove_empty_subfolders(self, root_folder: str) -> list[str]:
+        """Recursively removes any subfolder under root_folder that has no
+        files anywhere in its own subtree (bottom-up), leaving root_folder
+        itself in place even if it ends up empty. Used after --archive
+        moves files out of a folder tree, so processed subfolders (e.g.
+        one per podcast episode with --recursive) don't linger behind
+        empty on Dropbox, which doesn't remove empty folders on its own."""
+        FolderMetadata = self._dbx_module.files.FolderMetadata
+        FileMetadata = self._dbx_module.files.FileMetadata
+        ApiError = self._dbx_module.exceptions.ApiError
+
+        folder_path = root_folder.rstrip("/") or "/"
+        list_path = "" if folder_path == "/" else folder_path
+        entries = []
+        result = self.dbx.files_list_folder(list_path, recursive=True)
+        entries.extend(result.entries)
+        while result.has_more:
+            result = self.dbx.files_list_folder_continue(result.cursor)
+            entries.extend(result.entries)
+
+        folder_paths = sorted(
+            (e.path_display for e in entries if isinstance(e, FolderMetadata)),
+            key=lambda p: p.count("/"),
+            reverse=True,  # deepest first
+        )
+        file_paths = [e.path_display for e in entries if isinstance(e, FileMetadata)]
+
+        removed = []
+        for folder in folder_paths:
+            prefix = folder + "/"
+            if any(p.startswith(prefix) for p in file_paths):
+                continue
+            try:
+                self.dbx.files_delete_v2(folder)
+                removed.append(folder)
+                logger.info("Removed empty Dropbox folder: %s", folder)
+            except ApiError:
+                pass
+        return removed

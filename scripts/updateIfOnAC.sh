@@ -1,20 +1,31 @@
 #!/bin/bash
+
 lockPath="/Users/fcastell/voxelfc/.update.lock"
+
+createLock() {
+    (set -C; umask 077; echo "$$" > "$lockPath") 2>/dev/null
+}
 
 if ! /usr/bin/pmset -g batt | /usr/bin/grep -q "AC Power"; then
     exit 0
 fi
 
-if [ -f "$lockPath" ]; then
+if ! createLock; then
     existingPid=$(cat "$lockPath" 2>/dev/null)
+
     if [ -n "$existingPid" ] && kill -0 "$existingPid" 2>/dev/null; then
         echo "Already running (pid $existingPid), skipping."
         exit 0
     fi
-    echo "Stale lock found (pid ${existingPid:-unknown} not running); removing."
+
+    rm -f "$lockPath"
+
+    if ! createLock; then
+        echo "Could not acquire lock, skipping."
+        exit 0
+    fi
 fi
 
-echo $$ > "$lockPath"
 trap 'rm -f "$lockPath"' EXIT
 
 cd /Users/fcastell/voxelfc || exit 1

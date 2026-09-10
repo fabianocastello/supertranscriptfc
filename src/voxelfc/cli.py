@@ -176,7 +176,15 @@ def main(argv: list[str] | None = None) -> int:
             client = DropboxClient(
                 config.dropbox_app_key, config.dropbox_app_secret, config.dropbox_refresh_token
             )
-            if client.is_folder(args.source):
+            is_folder = client.is_folder(args.source)
+            if not is_folder and not client.file_exists(args.source):
+                logger.error(
+                    "Source not found on Dropbox: %s (check the path, or another machine may "
+                    "have already archived/moved it).",
+                    args.source,
+                )
+                return 1
+            if is_folder:
                 summary = run_dropbox_batch(
                     config,
                     client,

@@ -28,8 +28,15 @@ class DropboxClient:
         )
 
     def is_folder(self, path: str) -> bool:
+        """Returns False (rather than raising) if path doesn't exist at
+        all - callers that need to distinguish "doesn't exist" from "is a
+        file" should check file_exists()/is_folder() together."""
         FolderMetadata = self._dbx_module.files.FolderMetadata
-        metadata = self.dbx.files_get_metadata(path)
+        ApiError = self._dbx_module.exceptions.ApiError
+        try:
+            metadata = self.dbx.files_get_metadata(path)
+        except ApiError:
+            return False
         return isinstance(metadata, FolderMetadata)
 
     def file_exists(self, path: str) -> bool:
@@ -152,8 +159,17 @@ class DropboxClient:
             result = self.dbx.files_list_folder_continue(result.cursor)
             entries.extend(result.entries)
 
+        # files_list_folder(root_folder, recursive=True) can include
+        # root_folder itself as one of the returned FolderMetadata entries
+        # (confirmed against a real Dropbox folder that had become fully
+        # empty) - excluded here explicitly so the root is NEVER a
+        # deletion candidate, no matter what the SDK returns.
         folder_paths = sorted(
-            (e.path_display for e in entries if isinstance(e, FolderMetadata)),
+            (
+                e.path_display
+                for e in entries
+                if isinstance(e, FolderMetadata) and e.path_display.rstrip("/") != folder_path
+            ),
             key=lambda p: p.count("/"),
             reverse=True,  # deepest first
         )

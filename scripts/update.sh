@@ -27,8 +27,14 @@ if [ ! -x "$VENV_PYTHON" ]; then
 fi
 
 # We don't rely on PATH, which may mix .venv with Miniconda.
-echo "== Installing the updated code into the virtual environment =="
-"$VENV_PYTHON" -m pip install -q -e .
+# Reuses install.sh's own extras detection (GPU/mlx), so an update never
+# drifts from what a fresh install would set up - e.g. a new dependency
+# added to an existing extra is picked up here too, not just on install.
+EXTRAS_PYTHON="$VENV_PYTHON"
+# shellcheck disable=SC1091
+source "$REPO_DIR/scripts/_detect_extras.sh"
+echo "== Installing the updated code into the virtual environment (extras: ${EXTRAS}) =="
+"$VENV_PYTHON" -m pip install -q -e ".[${EXTRAS}]"
 
 if [ ! -x "$VOXELFC_BIN" ]; then
     echo "Executable not found after installation: $VOXELFC_BIN" >&2

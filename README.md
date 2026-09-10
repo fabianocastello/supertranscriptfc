@@ -62,6 +62,17 @@ After installing on any platform, edit the `.env` file created from
   `pyannote/speaker-diarization-3.1` and `pyannote/segmentation-3.0` models
   (accept each one's terms of use on the Hugging Face site before using them).
 
+## Diagnosing an installation
+
+To check whether everything is set up correctly on a given machine
+(Python version, venv, FFmpeg, dependencies, GPU/mlx acceleration, `.env`
+credentials, live Dropbox connectivity, and `VOXELFC_HOME`):
+
+```bash
+source .venv/bin/activate
+python utils/voxel_doctor.py
+```
+
 ## Usage
 
 Before running any command below, activate the virtual environment:

@@ -30,4 +30,4 @@ trap 'rm -f "$lockPath"' EXIT
 
 cd /Users/fcastell/voxelfc || exit 1
 source .venv/bin/activate
-bash scripts/update.sh --source "/_AudioMemosFC/_Inbox.AudioZapDownFC" --model-size large-v3 --vtt --max-minutes 1 --archive "/_AudioMemosFC/_Inbox.AudioZapDownFC.Ready" --recursive
+bash scripts/update.sh "$@"

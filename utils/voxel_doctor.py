@@ -231,9 +231,27 @@ def check_voxelfc_home() -> None:
     config = Config()
     try:
         config.ensure_dirs()
-        check("VOXELFC_HOME", OK, f"{config.home_dir} (writable)")
     except OSError as exc:
         check("VOXELFC_HOME", FAIL, f"{config.home_dir} not writable: {exc}")
+        return
+
+    # mkdir succeeding only proves the directories exist/are creatable -
+    # it says nothing about an EXISTING file inside them, which can still
+    # be unwritable (e.g. left over with another user's ownership after
+    # moving ~/.voxelfc to a different account, as happened on MBA22:
+    # PermissionError on voxelfc.log even though the logs/ dir was fine).
+    log_file = config.logs_dir / "voxelfc.log"
+    try:
+        with open(log_file, "a", encoding="utf-8"):
+            pass
+        check("VOXELFC_HOME", OK, f"{config.home_dir} (writable, log file OK)")
+    except OSError as exc:
+        check(
+            "VOXELFC_HOME",
+            FAIL,
+            f"{log_file} exists but isn't writable ({exc}) - likely wrong ownership/"
+            f"permissions. Fix: sudo chown -R \"$(whoami)\" {config.home_dir}",
+        )
 
 
 def print_report() -> int:

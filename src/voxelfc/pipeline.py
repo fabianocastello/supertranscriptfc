@@ -303,8 +303,13 @@ def process_file(
         "running_on": socket.gethostname(),
         "model": config.model_size,
         "language_detected": detected_language or "unknown",
+        # Written as a quoted string, not a bare YAML number: Obsidian's
+        # Properties panel renders bare numeric front-matter values with a
+        # locale-formatted decimal separator (e.g. "0,97" on a pt-BR
+        # system) even though the raw file always uses a period - a quoted
+        # string is shown verbatim instead.
         "language_probability": (
-            round(detected_language_probability, 2)
+            f"{detected_language_probability:.2f}"
             if detected_language_probability is not None
             else None
         ),

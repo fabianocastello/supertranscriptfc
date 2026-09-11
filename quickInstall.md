@@ -221,9 +221,26 @@ The argument must be a positive integer immediately followed by `s`, `m`, or `h`
 --older_than 1h
 ```
 
+### Remove every lock, regardless of age
+
+`--older_than` never touches a lock whose start date can't be parsed, no matter how
+old it actually is. To clear those too - or to just wipe every lock in a folder
+outright - use `--remove_all` instead of `--older_than`:
+
+```bash
+python ./tools/remove_locks.py /_AudioMemosFC/MamyCalls --remove_all --dry-run
+python ./tools/remove_locks.py /_AudioMemosFC/MamyCalls --remove_all
+```
+
+`--remove_all` does no age filtering at all - it removes literally every lock found,
+including ones with no parseable date. `--older_than` and `--remove_all` are
+mutually exclusive; exactly one is required.
+
 > Safety: before deleting a lock, confirm on the indicated machine that there's no
 > real run actually corresponding to it. Removing an active lock can let another
-> process start the same audio file in parallel.
+> process start the same audio file in parallel. `--remove_all` in particular does
+> not check whether a lock looks active - only use it when you're sure no machine is
+> currently mid-job on this folder.
 
 ---
 
@@ -252,21 +269,43 @@ aren't included in the calculations.
 
 ---
 
-## 8. Validate the installation
+## 8. Rename legacy transcripts
+
+Optional cleanup: renames `.voxel.txt`/`.transcriptFC.txt` transcripts (from older
+versions of the pipeline) to the current `.voxel.md` suffix. Not required for
+correctness - the pipeline already recognizes the legacy names as "already done" -
+but useful to standardize a folder.
+
+```bash
+python ./tools/rename_transcripts.py /_AudioMemosFC/MamyCalls --dry-run
+python ./tools/rename_transcripts.py /_AudioMemosFC/MamyCalls
+```
+
+If a file with the destination name (`.voxel.md`) already exists, that particular
+rename is skipped and reported - never overwritten.
+
+---
+
+## 9. Validate the installation
 
 ```bash
 python -m py_compile \
   tools/dropbox_lock_utils.py \
   tools/status.py \
   tools/remove_locks.py \
-  tools/audit.py
+  tools/audit.py \
+  tools/rename_transcripts.py
 ```
 
-Test the help text without accessing Dropbox:
+Test the help text without accessing Dropbox - every tool now prints its full
+description and usage examples (not just a one-line usage summary) on `--help` or
+on any usage error:
 
 ```bash
 python ./tools/status.py --help
 python ./tools/remove_locks.py --help
+python ./tools/audit.py --help
+python ./tools/rename_transcripts.py --help
 ```
 
 Test format validation without removing anything:

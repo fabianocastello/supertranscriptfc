@@ -1,15 +1,23 @@
 #!/usr/bin/env python3
 """Read-only audit of the transcripts/locks in a Dropbox folder.
 
-May temporarily download audio files associated with locks to measure their
-duration with ffprobe; it does not create files on Dropbox and does not
-change any remote data.
-Only reads remote metadata and content; local temporary files are removed
-at the end.
-
 Usage:
     python ./tools/audit.py /_AudioMemosFC/MamyCalls
     python ./tools/audit.py /Other/Folder --output tools/report.md
+    python ./tools/audit.py /_AudioMemosFC/MamyCalls --env /path/to/other.env
+
+Arguments:
+    root        Absolute Dropbox folder path to audit (must start with '/').
+    --env       Path to the .env file with Dropbox credentials (default: .env
+                at the project root).
+    --output    Where to save the generated report (default:
+                tools/YYYY-MM-DD-HH-MM__<sanitized folder name>.md).
+
+Generates a full report: front-matter metrics, list of transcripts, and
+locks found. May temporarily download audio files associated with locks
+to measure their duration with ffprobe; it does not create files on
+Dropbox and does not change any remote data - only reads remote metadata
+and content, and local temporary files are removed at the end.
 """
 from __future__ import annotations
 
@@ -23,6 +31,7 @@ from pathlib import Path, PurePosixPath
 from dotenv import dotenv_values
 
 from dropbox_lock_utils import (
+    HelpfulArgumentParser,
     lock_suffix_for,
     probe_remote_audio_duration,
     strip_lock_suffix,
@@ -488,10 +497,14 @@ def make_report(data: dict) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("root", help="Absolute path of the Dropbox folder")
-    parser.add_argument("--env", default=".env")
-    parser.add_argument("--output", default=None)
+    parser = HelpfulArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument("root", help="Absolute path of the Dropbox folder (must start with '/')")
+    parser.add_argument("--env", default=".env", help="Path to the .env file (default: .env)")
+    parser.add_argument(
+        "--output", default=None, help="Report output path (default: auto-generated under tools/)"
+    )
     args = parser.parse_args(argv)
 
     data = audit(args.root, Path(args.env).resolve())

@@ -3,9 +3,12 @@
 
 Usage:
     python ./tools/status.py /_AudioMemosFC/MamyCalls
+    python ./tools/status.py /Other/Folder
 
-The query uses the .env at the project root, lists the remote locks, and
-does not modify any file on Dropbox.
+The only argument is the absolute Dropbox folder path to check (must
+start with '/'). The query uses the .env file at the project root, lists
+the remote locks (machine, file, start time, elapsed time), and does not
+modify any file on Dropbox - it's fully read-only.
 """
 from __future__ import annotations
 
@@ -18,6 +21,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from dropbox_lock_utils import (  # noqa: E402
+    HelpfulArgumentParser,
     collect_locks,
     connect_from_env,
     display_start,
@@ -30,8 +34,10 @@ from dropbox_lock_utils import (  # noqa: E402
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("root", help="Absolute path of the Dropbox folder")
+    parser = HelpfulArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument("root", help="Absolute path of the Dropbox folder (must start with '/')")
     args = parser.parse_args()
 
     try:

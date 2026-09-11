@@ -24,6 +24,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from dropbox_lock_utils import (  # noqa: E402
+    HelpfulArgumentParser,
     LEGACY_TRANSCRIPT_SUFFIXES,
     TRANSCRIPT_SUFFIX,
     connect_from_env,
@@ -32,10 +33,10 @@ from dropbox_lock_utils import (  # noqa: E402
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
+    parser = HelpfulArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("root", help="Absolute path of the Dropbox folder")
+    parser.add_argument("root", help="Absolute path of the Dropbox folder (must start with '/')")
     parser.add_argument(
         "--dry-run",
         action="store_true",

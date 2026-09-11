@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import argparse
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
@@ -8,6 +10,19 @@ import subprocess
 import tempfile
 
 from dotenv import dotenv_values
+
+
+class HelpfulArgumentParser(argparse.ArgumentParser):
+    """Prints the FULL help (description, all options, usage examples) -
+    not just the terse one-line usage - whenever there's a usage error
+    (a missing required argument, an invalid value, etc.). Plain
+    argparse.ArgumentParser only shows the short "usage: ..." line plus
+    the error on a mistake, forcing the user to separately run --help to
+    see how the tool is actually meant to be used."""
+
+    def error(self, message: str) -> None:
+        self.print_help(sys.stderr)
+        self.exit(2, f"\n{self.prog}: error: {message}\n")
 
 AUDIO_EXTENSIONS = (".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".wma", ".mp4", ".mov")
 TRANSCRIPT_SUFFIX = ".voxel.md"

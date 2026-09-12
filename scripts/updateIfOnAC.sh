@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# launchd/cron run with a minimal PATH that doesn't include Homebrew's bin
+# dirs, even though ffmpeg/git/etc. work fine in an interactive shell -
+# this caused a real "ffmpeg not found in PATH" failure in production.
+export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:$PATH"
+
 lockPath="/Users/fcastell/voxelfc/.update.lock"
 
 createLock() {

@@ -67,6 +67,27 @@ def _trimmed_stem_name(name: str) -> str | None:
     return f"{trimmed}{ext}"
 
 
+def _trim_companion_subtitles_local(old_audio_path: Path, new_audio_path: Path) -> None:
+    """If a pre-existing .vtt/.srt sits next to the audio under its OLD
+    (untrimmed) name, renames it to match the audio's new trimmed name
+    too - otherwise _find_existing_subtitle_local's exact-stem match
+    would never find it again after the audio itself gets trimmed."""
+    for ext in ("vtt", "srt"):
+        old_subtitle = old_audio_path.with_suffix(f".{ext}")
+        if not old_subtitle.exists():
+            continue
+        new_subtitle = new_audio_path.with_suffix(f".{ext}")
+        if new_subtitle.exists():
+            logger.warning(
+                "Can't trim whitespace from companion '%s': '%s' already exists there.",
+                old_subtitle.name,
+                new_subtitle.name,
+            )
+            continue
+        old_subtitle.rename(new_subtitle)
+        logger.info("Renamed companion subtitle '%s' -> '%s' too.", old_subtitle.name, new_subtitle.name)
+
+
 def _ensure_local_name_trimmed(path: Path) -> Path:
     new_name = _trimmed_stem_name(path.name)
     if new_name is None:
@@ -79,7 +100,28 @@ def _ensure_local_name_trimmed(path: Path) -> Path:
         return path
     path.rename(new_path)
     logger.info("Renamed '%s' -> '%s' (trimmed whitespace before the extension).", path.name, new_name)
+    _trim_companion_subtitles_local(path, new_path)
     return new_path
+
+
+def _trim_companion_subtitles_dropbox(dropbox_client, old_path: str, new_path: str) -> None:
+    """Dropbox equivalent of _trim_companion_subtitles_local."""
+    old_purepath = PurePosixPath(old_path)
+    new_purepath = PurePosixPath(new_path)
+    for ext in ("vtt", "srt"):
+        old_subtitle = str(old_purepath.with_suffix(f".{ext}"))
+        if not dropbox_client.file_exists(old_subtitle):
+            continue
+        new_subtitle = str(new_purepath.with_suffix(f".{ext}"))
+        if dropbox_client.file_exists(new_subtitle):
+            logger.warning(
+                "Can't trim whitespace from companion '%s': '%s' already exists there.",
+                old_subtitle,
+                new_subtitle,
+            )
+            continue
+        dropbox_client.move_file(old_subtitle, new_subtitle)
+        logger.info("Renamed companion subtitle '%s' -> '%s' too.", old_subtitle, new_subtitle)
 
 
 def _ensure_dropbox_name_trimmed(dropbox_client, path: str) -> str:
@@ -93,6 +135,7 @@ def _ensure_dropbox_name_trimmed(dropbox_client, path: str) -> str:
         return path
     dropbox_client.move_file(path, new_path)
     logger.info("Renamed '%s' -> '%s' (trimmed whitespace before the extension).", path, new_path)
+    _trim_companion_subtitles_dropbox(dropbox_client, path, new_path)
     return new_path
 
 
